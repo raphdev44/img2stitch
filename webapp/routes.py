@@ -6,6 +6,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from .designs import (BACKGROUND_MODES, DEFAULT_SIZE_MM, FABRICS, FILL_TYPES, FORMATS, MAX_COLORS, MAX_SIZE_MM,
                       MIN_COLORS, MIN_SIZE_MM, ZONES, InvalidImage, analyse_image, clean_name, export_filename,
                       parse_edits, parse_exclusions)
+from .designs import _HEX_RE as HEX_RE
 
 bp = Blueprint("web", __name__)
 
@@ -156,6 +157,31 @@ def api_rename(design_id):
     except InvalidImage as e:
         return jsonify(error=str(e)), 409
     return jsonify(name=name, filename=export_filename(name, "pes"))
+
+
+@bp.post("/api/motifs/<design_id>/fil")
+def api_recolor(design_id):
+    meta = store().get(design_id) or abort(404)
+    body = request.get_json(silent=True) or {}
+    old, new = str(body.get("from", "")).lower(), str(body.get("to", "")).lower()
+    if old not in (meta.get("threads") or []) or not HEX_RE.match(new):
+        return jsonify(error="Couleur invalide."), 400
+    try:
+        store().recolor(design_id, old, new)
+    except InvalidImage as e:
+        return jsonify(error=str(e)), 409
+    return jsonify(_public(store().get(design_id))), 202
+
+
+@bp.post("/api/motifs/<design_id>/fusion")
+def api_merge(design_id):
+    if store().get(design_id) is None:
+        abort(404)
+    try:
+        store().merge_colors(design_id, bool((request.get_json(silent=True) or {}).get("enabled", True)))
+    except InvalidImage as e:
+        return jsonify(error=str(e)), 409
+    return jsonify(_public(store().get(design_id))), 202
 
 
 @bp.post("/api/motifs/<design_id>/tissu")

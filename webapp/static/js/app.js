@@ -319,6 +319,39 @@
         waitPhoto();
       }
     }
+
+    // Fils : pastille -> sélecteur de couleur (toute la broderie), fusion des couleurs identiques
+    const threads = $("#threads");
+    if (threads) {
+      const err = $("#threads-error");
+      const send = async (url, body) => {
+        err.hidden = true;
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(json.error || "La modification n'a pas pu être appliquée.");
+          window.location.reload();
+        } catch (ex) {
+          err.textContent = ex.message;
+          err.hidden = false;
+        }
+      };
+      $$('input[type="color"]', threads).forEach((input) => {
+        input.addEventListener("input", () => { input.previousElementSibling.style.setProperty("--c", input.value); });
+        input.addEventListener("change", () => {
+          if (input.value.toLowerCase() === input.dataset.from) return;
+          send(threads.dataset.recolor, { from: input.dataset.from, to: input.value.toLowerCase() });
+        });
+      });
+      $("#merge-btn")?.addEventListener("click", (e) => {
+        e.currentTarget.disabled = true;
+        send(threads.dataset.merge, { enabled: true });
+      });
+    }
   }
 
   // --- Galerie : rafraîchit tant que des motifs sont en cours ---
@@ -339,6 +372,9 @@
     const applyBtn = $("#edit-apply");
     const resetBtn = $("#edit-reset");
     const errEl = $("#edit-error");
+    const loading = $("#editor-loading");
+    const loadingText = $("#editor-loading-text");
+    const loadingStep = $("#editor-loading-step");
     let zmap = null, zw = 0, zh = 0;
     // Sélection : {type: "block", i} (toute une couleur, depuis la liste) ou {type: "region", j} (zone fermée cliquée)
     let target = null, selMask = null;
@@ -618,7 +654,23 @@
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json.error || "Une erreur est survenue.");
-        window.location.href = json.urls.page;
+        // On reste dans l'éditeur : attente de la régénération puis rechargement (nouvelles zones, nouvel aperçu)
+        closeMenu();
+        if (loadingText) loadingText.textContent = "Application des modifications…";
+        if (loading) loading.hidden = false;
+        const wait = async () => {
+          try {
+            const d = await (await fetch(root.dataset.status, { cache: "no-store" })).json();
+            if (d.status === "processing") {
+              if (loadingStep) loadingStep.textContent = d.step ? `${d.step}…` : "";
+              return setTimeout(wait, 1200);
+            }
+            window.location.reload();
+          } catch {
+            setTimeout(wait, 2000);
+          }
+        };
+        setTimeout(wait, 800);
       } catch (ex) {
         showError(ex.message);
         applyBtn.classList.remove("loading");

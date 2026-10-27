@@ -8,11 +8,15 @@
     <h1>Modifier « {{ d.name }} »</h1>
     <p class="muted">Cliquez sur une zone de l'aperçu pour changer sa couleur ou son motif de remplissage : seule la zone fermée cliquée est modifiée.</p>
   </div>
+  <a class="btn-ghost" id="edit-exit" href="{{ url_for('web.design', design_id=d.id) }}">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5M10 16l-4-4 4-4M6 12h10"/></svg>Sortir du mode édition
+  </a>
 </div>
 
 {% set img_name = 'preview_photo.png' if d.has_photo else 'preview_raw.png' %}
 <div class="design-layout" id="editor"
      data-api="{{ url_for('web.api_edit', design_id=d.id) }}"
+     data-status="{{ url_for('web.api_get', design_id=d.id) }}"
      data-zonemap="{{ url_for('web.design_file', design_id=d.id, name='zones.png', v=d.photo_version) }}">
   <section class="card stage-card">
     <div class="stage editor-stage">
@@ -23,7 +27,8 @@
       </div>
       <div class="stage-progress" id="editor-loading">
         <span class="spinner big"></span>
-        <strong>Préparation des zones…</strong>
+        <strong id="editor-loading-text">Préparation des zones…</strong>
+        <small id="editor-loading-step"></small>
       </div>
     </div>
     <p class="hint editor-hint">Les nouvelles couleurs sont montrées à titre indicatif ; le rendu exact (fils, motif de remplissage) est recalculé quand vous appliquez les modifications.</p>

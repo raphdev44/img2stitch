@@ -94,9 +94,30 @@
         <div><dt>Coupes</dt><dd>{{ d.stats.trims }}</dd></div>
       </dl>
       <h3>Fils</h3>
-      <ol class="threads">
-        {% for c in d.threads %}<li><span class="swatch" style="--c: {{ c }}"></span><code>{{ c }}</code></li>{% endfor %}
+      {% set editable = d.status == 'ready' %}
+      <ol class="threads" id="threads" data-recolor="{{ url_for('web.api_recolor', design_id=d.id) }}"
+          data-merge="{{ url_for('web.api_merge', design_id=d.id) }}">
+        {% for c in d.threads %}<li>
+          {% if editable %}
+          <label class="swatch-pick" title="Changer la couleur de ce fil dans toute la broderie">
+            <span class="swatch" style="--c: {{ c }}"></span>
+            <input type="color" value="{{ c }}" data-from="{{ c }}" aria-label="Changer la couleur du fil {{ c }}">
+          </label>
+          {% else %}<span class="swatch" style="--c: {{ c }}"></span>{% endif %}
+          <code>{{ c }}</code></li>{% endfor %}
       </ol>
+      {% if editable %}<p class="hint">Cliquez sur une pastille pour changer la couleur de ce fil dans toute la broderie.</p>{% endif %}
+      {% if editable and d.threads | length != d.threads | unique | list | length %}
+      <div class="merge-box">
+        {% if d.merge_colors %}
+        <p>Les fils de même couleur restants ne peuvent pas être regroupés sans changer la superposition des zones.</p>
+        {% else %}
+        <p>Plusieurs fils ont la même couleur : chacun ajoute un changement de fil sur la machine.</p>
+        <button type="button" class="btn-ghost" id="merge-btn">Fusionner les couleurs identiques</button>
+        {% endif %}
+      </div>
+      {% endif %}
+      <p class="form-error" id="threads-error" role="alert" hidden></p>
     </section>
 
     <section class="card">

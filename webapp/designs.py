@@ -115,6 +115,27 @@ class DesignStore:
             meta["name"] = name
             self._write(d, meta)
 
+    # --- Fusion des fils de même couleur ---
+    def recolor(self, design_id, old, new):
+        """Change la couleur d'un fil dans toute la broderie : toutes les zones de ce fil prennent `new`."""
+        if new == old:
+            return
+        self.apply_edits(design_id, [{"color": new if z["color"] == old else z["color"], "fill": z["fill"]}
+                                     for z in self.zones(design_id)])
+
+    def merge_colors(self, design_id, enabled=True):
+        d = self.dir(design_id)
+        with self._modify_lock:
+            meta = self._read(d)
+            if meta.get("status") != "ready" or meta.get("photo_rendering"):
+                raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
+            # "editing" : en cas d'échec le motif reste utilisable, avec ses zones d'avant
+            meta.update(merge_colors=enabled, editing=True, zones_previous=meta.get("zones"),
+                        regions_previous=meta.get("regions"), status="processing",
+                        step="Fusion des fils de même couleur", error=None, edit_error=None)
+            self._write(d, meta)
+        self._pool.submit(self._generate, d)
+
     # --- Édition des zones ---
     def zones(self, design_id):
         """Blocs de couleur du motif, dans l'ordre de piqué : [{"source", "color", "fill", "region"}, ...].
@@ -389,7 +410,8 @@ def _settings(meta):
                     exclude_colors=_exclude_setting(meta.get("excluded", [])),
                     zone_overrides=_zone_setting(meta.get("zones") or []),
                     region_overrides=tuple(((r["u"], r["v"]), _rgb(r["source"]), _rgb(r["color"]), r["fill"])
-                                           for r in meta.get("regions") or []))
+                                           for r in meta.get("regions") or []),
+                    merge_same_colors=bool(meta.get("merge_colors")))
 
 
 def _zone_setting(zones):
@@ -439,12 +461,16 @@ def _render_zone_map(pattern, path, ppm=5, margin_mm=6):
     px = lambda x, y: (round((x / 10 - x0 + margin_mm) * ppm), round((y / 10 - y0 + margin_mm) * ppm))
     ci, last = 0, None
     width = max(2, round(0.7 * ppm))
-    for x, y, cmd in pattern.stitches:
+    # Zones fusionnées sur un même fil : on suit les segments (début de chaque zone), sinon les changements de fil
+    starts = dict(getattr(pattern, "img2stitch_segments", None) or [])
+    for n, (x, y, cmd) in enumerate(pattern.stitches):
         c = cmd & pe.COMMAND_MASK
         cur = px(x, y)
+        if starts and n in starts:
+            ci = starts[n]
         if c == pe.STITCH and last is not None:
             cv2.line(zmap, last, cur, ci + 1, width)
-        elif c == pe.COLOR_CHANGE:
+        elif c == pe.COLOR_CHANGE and not starts:
             ci += 1
         last = cur
     Image.fromarray(zmap, "L").save(path, "PNG")
@@ -453,7 +479,8 @@ def _render_zone_map(pattern, path, ppm=5, margin_mm=6):
 def _save_pattern(pattern, path):
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"stitches": [[float(x), float(y), int(c)] for x, y, c in pattern.stitches],
-                   "threads": [t.color & 0xFFFFFF for t in pattern.threadlist]}, f)
+                   "threads": [t.color & 0xFFFFFF for t in pattern.threadlist],
+                   "segments": getattr(pattern, "img2stitch_segments", None)}, f)
 
 
 def _load_pattern(d):
@@ -469,6 +496,8 @@ def _load_pattern(d):
     pattern.stitches = [list(s) for s in data["stitches"]]
     for c in data["threads"]:
         pattern.add_thread({"color": c})
+    if data.get("segments"):
+        pattern.img2stitch_segments = [tuple(s) for s in data["segments"]]
     return pattern
 
 

@@ -104,6 +104,12 @@ def _build_pattern(path, s: Settings):
 
     frame = {"w": masks[0].shape[1], "h": masks[0].shape[0], "ppm": px_per_mm, "cx": 0.0, "cy": 0.0, "scale": 1.0}
     palette, masks, regions = _split_regions(palette, masks, s.region_overrides, px_per_mm)
+    looks = [_zone_override(rgb, s.zone_overrides) if regions[i] is None
+             else (tuple(s.region_overrides[regions[i]][2] or rgb), s.region_overrides[regions[i]][3] or "tatami")
+             for i, rgb in enumerate(palette)]
+    if s.merge_same_colors:
+        order = _merge_order([c for c, _ in looks], masks, px_per_mm, s.overlap_mm)
+        palette, masks, regions, looks = ([lst[k] for k in order] for lst in (palette, masks, regions, looks))
     fill_masks = overlap_masks(masks, px_per_mm, s.overlap_mm)
 
     # later[i] = tout ce qui sera piqué APRÈS la couleur i : un fil qui passe là sera recouvert
@@ -114,27 +120,29 @@ def _build_pattern(path, s: Settings):
         acc |= masks[i]
 
     sw = Sewer(pattern, s, px_per_mm)
-    first = True
-    zones = []  # (couleur d'origine, index de la retouche de zone ou None) de chaque bloc, dans l'ordre de piqué
+    first, thread = True, None
+    zones = []  # (couleur d'origine, index de la retouche de zone ou None) de chaque zone, dans l'ordre de piqué
+    segments = []  # (index du premier point, index de zone) : plusieurs zones peuvent partager un même fil
     tol = np.ones((3, 3), np.uint8)  # tolérance d'1 px : les contours sont sur le bord des formes
     for i, (rgb, mask, fmask) in enumerate(zip(palette, masks, fill_masks)):
-        if regions[i] is None:
-            color, kind = _zone_override(rgb, s.zone_overrides)
-        else:
-            _, _, r_color, r_kind = s.region_overrides[regions[i]]
-            color, kind = tuple(r_color or rgb), r_kind or "tatami"
+        color, kind = looks[i]
         passes = zone_fill(kind, fmask, px_per_mm, s)
         loops = contours_mm(mask, px_per_mm, s.outline_simplify_mm, s.min_area_mm2) if s.outline else []
         if not any(data for _, data in passes) and not loops:
             continue
-        if not first:
-            pattern.add_command(pe.COLOR_CHANGE)
-        first = False
-        pattern.add_thread({"color": (color[0] << 16) | (color[1] << 8) | color[2]})
+        same = s.merge_same_colors and color == thread  # même fil que la zone précédente : pas de changement
+        if not same:
+            if not first:
+                pattern.add_command(pe.COLOR_CHANGE)
+            pattern.add_thread({"color": (color[0] << 16) | (color[1] << 8) | color[2]})
+        first, thread = False, color
+        segments.append((len(pattern.stitches), len(zones)))
         zones.append((tuple(rgb), regions[i]))
 
         hidden = cv2.dilate((fmask | later[i]).astype(np.uint8), tol).astype(bool)
         sw.new_color(hidden, later[i])
+        if same:
+            sw.fresh = False  # vrai déplacement vers cette zone : piqué à couvert, ou coupe + saut
         for what, data in passes:
             if what == "runs":
                 plan_fill(sw, data)
@@ -144,10 +152,31 @@ def _build_pattern(path, s: Settings):
             plan_outline(sw, loops, s.outline_passes)
     pattern.end()
     pattern.img2stitch_zones = zones
+    pattern.img2stitch_segments = segments
     if s.center_on_origin:
         frame["cx"], frame["cy"] = _center_on_origin(pattern)
     pattern.img2stitch_frame = frame
     return pattern
+
+
+def _merge_order(colors, masks, px_per_mm, overlap_mm):
+    """Ordre de piqué qui rapproche les zones de même fil, sans changer la superposition : une zone n'est
+    avancée que si elle ne touche aucune des zones qu'elle dépasse (sinon le dessus et le dessous s'inverseraient)."""
+    r = max(1, round(max(overlap_mm, 0.1) * px_per_mm)) + 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
+    grown = [cv2.dilate(m.astype(np.uint8), kernel).astype(bool) for m in masks]
+    touch = lambda a, b: bool((grown[a] & masks[b]).any())
+    remaining, order = list(range(len(masks))), []
+    while remaining:
+        order.append(remaining.pop(0))
+        j = 0
+        while j < len(remaining):
+            k = remaining[j]
+            if colors[k] == colors[order[-1]] and not any(touch(k, m) for m in remaining[:j]):
+                order.append(remaining.pop(j))
+            else:
+                j += 1
+    return order
 
 
 def _split_regions(palette, masks, region_overrides, px_per_mm, tol=40.0, search_mm=0.8):

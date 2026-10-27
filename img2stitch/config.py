@@ -19,6 +19,7 @@ class Settings:
     exclude_colors: tuple = ()      # couleurs à ne pas broder : ((r,g,b), ((r,g,b) des autres couleurs de la palette)), ...
     zone_overrides: tuple = ()      # retouches par zone : ((r,g,b) d'origine, (r,g,b) du fil ou None, motif ou None), ...
     region_overrides: tuple = ()    # retouches d'une zone fermée : ((u, v) dans l'image en fraction, (r,g,b) d'origine, fil, motif)
+    merge_same_colors: bool = False  # zones de même fil piquées à la suite, sans changement de fil (si la superposition le permet)
     center_on_origin: bool = True   # centre le motif sur (0,0) = centre du cerceau, comme l'attendent les machines
     stagger: bool = True            # décale les points d'une rangée à l'autre (aspect "brique", plus régulier)
 
