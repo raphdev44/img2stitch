@@ -40,3 +40,15 @@ Exemple complet dans `examples/`.
 Puis ouvrir http://127.0.0.1:5000 : création de motifs (image, nombre de couleurs, suppression du fond),
 aperçus réaliste / simple, téléchargement dans tous les formats, galerie.
 Les motifs sont stockés dans `instance/designs/` (modifiable via la variable `IMG2STITCH_DATA`).
+
+### Pixel art en point de croix
+Depuis la galerie, « + Nouveau pixel art en point de croix » ouvre un import dédié.
+Un moteur distinct détecte les cases d'une grille régulière et génère une croix de 2 mm
+par case colorée, sans broder les lignes du quadrillage. Les petites images à leur résolution
+native sont également acceptées : un pixel correspond alors à une case.
+La palette et les dimensions sont calculées automatiquement et ne sont pas modifiables.
+Les nuances très proches dues à la compression sont regroupées automatiquement.
+Seule la suppression de l'arrière-plan est configurable, avec les mêmes trois modes que
+la création classique. Les aperçus et les huit formats de téléchargement restent disponibles.
+Limites : 200 cases par côté (400 mm), 40 000 cases, 256 couleurs ; une grille non détectée
+sur une grande image est signalée comme une erreur.

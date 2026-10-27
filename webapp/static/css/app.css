@@ -109,6 +109,12 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; colo
 .hero p { color: var(--muted); font-size: 1.05rem; margin: 12px 0 0; }
 
 .create-card { display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; padding: 28px; max-width: 980px; margin: 0 auto; }
+.cross-create { max-width: none; padding: 24px 0; border-top: 1px solid var(--border); }
+.cross-create > * { min-width: 0; }
+.cross-create .dropzone { border-radius: 8px; }
+.cross-create .dz-preview img { image-rendering: pixelated; }
+.gallery-actions { flex-wrap: wrap; }
+.gallery-actions a { max-width: 100%; text-align: center; }
 @media (max-width: 820px) { .create-card { grid-template-columns: 1fr; } }
 
 .dropzone {
@@ -229,6 +235,8 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px va
 .stage-card { padding: 14px; }
 .stage-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .stage-toolbar .segmented { margin-bottom: 0; }
+.stage-fit { flex: none; white-space: nowrap; }
+.edit-stage-toolbar { justify-content: flex-end; }
 .fabrics { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .fabrics span { margin-right: 4px; }
 .fabric {
@@ -248,9 +256,12 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px va
 .stage {
   position: relative; display: grid; place-items: center; min-height: 420px; border-radius: 12px; overflow: hidden;
   background: repeating-conic-gradient(#00000008 0 25%, transparent 0 50%) 0 0 / 22px 22px, var(--surface-2);
+  touch-action: none; user-select: none;
 }
-.stage img { grid-area: 1 / 1; max-width: 100%; max-height: 72vh; object-fit: contain; opacity: 0; transition: opacity .35s; }
+.stage img { grid-area: 1 / 1; max-width: 100%; max-height: 72vh; object-fit: contain; opacity: 0; transform-origin: center; transition: opacity .35s; }
 .stage img.shown { opacity: 1; }
+.stage.is-zoomed { cursor: grab; }
+.stage.is-panning { cursor: grabbing; }
 .stage-progress {
   grid-area: 1 / 1; z-index: 1; display: grid; justify-items: center; gap: 10px; text-align: center;
   padding: 24px 32px; border-radius: 16px; background: color-mix(in srgb, var(--surface) 88%, transparent);
@@ -337,9 +348,10 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px va
 a.btn-ghost { display: inline-flex; align-items: center; }
 
 /* --- Éditeur de motif --- */
-.editor-canvas { grid-area: 1 / 1; position: relative; display: inline-block; line-height: 0; }
+.editor-canvas { grid-area: 1 / 1; position: relative; display: inline-block; line-height: 0; transform-origin: center; }
 .editor-stage .editor-canvas img { grid-area: auto; display: block; opacity: 1; max-width: 100%; max-height: 72vh; }
 .editor-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.editor-stage.is-panning #editor-overlay { cursor: grabbing !important; }
 .editor-hint { margin: 10px 4px 0; }
 .editor-stage .stage-progress { z-index: 2; }
 #edit-exit svg { width: 16px; height: 16px; }

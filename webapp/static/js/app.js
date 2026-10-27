@@ -3,6 +3,183 @@
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
   const page = document.body.dataset.page;
 
+  function setupStageNavigation(stage, getContent, fitButton) {
+    let scale = 1, fitScale = 1, offsetX = 0, offsetY = 0;
+    let pan = null, pinch = null, moved = false, suppressClickUntil = 0;
+    const pointers = new Map();
+    const clampScale = (value) => Math.max(Math.min(0.2, fitScale), Math.min(Math.max(8, fitScale * 8), value));
+    const apply = () => {
+      const content = getContent();
+      if (content) content.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0) scale(${scale})`;
+      stage.classList.toggle("is-zoomed", scale > fitScale * 1.02 || Math.abs(offsetX) > 1 || Math.abs(offsetY) > 1);
+    };
+    const fit = () => {
+      const content = getContent();
+      if (!content || !content.offsetWidth || !content.offsetHeight) return;
+      fitScale = Math.min(8, Math.max(0.1, Math.min(
+        (stage.clientWidth - 32) / content.offsetWidth,
+        (stage.clientHeight - 32) / content.offsetHeight,
+      )));
+      scale = fitScale;
+      offsetX = offsetY = 0;
+      apply();
+    };
+    const point = (event) => {
+      const rect = stage.getBoundingClientRect();
+      return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    };
+    const zoomAt = (next, clientX, clientY) => {
+      const rect = stage.getBoundingClientRect();
+      const px = clientX - rect.left - rect.width / 2;
+      const py = clientY - rect.top - rect.height / 2;
+      const ratio = next / scale;
+      offsetX = px - (px - offsetX) * ratio;
+      offsetY = py - (py - offsetY) * ratio;
+      scale = next;
+      apply();
+    };
+    const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const center = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+    stage.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      zoomAt(clampScale(scale * Math.exp(-event.deltaY * 0.0015)), event.clientX, event.clientY);
+    }, { passive: false });
+    stage.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      if (!pointers.size) moved = false;
+      const p = point(event);
+      pointers.set(event.pointerId, p);
+      if (event.target.setPointerCapture) event.target.setPointerCapture(event.pointerId);
+      if (pointers.size === 1) {
+        pan = { id: event.pointerId, start: p, originX: offsetX, originY: offsetY, moved: false };
+      } else if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinch = { distance: distance(a, b), center: center(a, b), scale, offsetX, offsetY };
+        pan = null;
+      }
+      stage.classList.add("is-panning");
+    });
+    stage.addEventListener("pointermove", (event) => {
+      if (!pointers.has(event.pointerId)) return;
+      const p = point(event);
+      pointers.set(event.pointerId, p);
+      if (pointers.size === 2 && pinch) {
+        const [a, b] = [...pointers.values()];
+        const nextCenter = center(a, b);
+        const ratio = clampScale(pinch.scale * distance(a, b) / Math.max(1, pinch.distance)) / pinch.scale;
+        const originX = pinch.center.x - stage.clientWidth / 2;
+        const originY = pinch.center.y - stage.clientHeight / 2;
+        offsetX = originX - (originX - pinch.offsetX) * ratio + nextCenter.x - pinch.center.x;
+        offsetY = originY - (originY - pinch.offsetY) * ratio + nextCenter.y - pinch.center.y;
+        scale = pinch.scale * ratio;
+        moved = true;
+        apply();
+      } else if (pan?.id === event.pointerId) {
+        const dx = p.x - pan.start.x, dy = p.y - pan.start.y;
+        if (Math.hypot(dx, dy) > 4) pan.moved = moved = true;
+        if (pan.moved) {
+          offsetX = pan.originX + dx;
+          offsetY = pan.originY + dy;
+          apply();
+        }
+      }
+    });
+    const endPointer = (event) => {
+      if (!pointers.has(event.pointerId)) return;
+      pointers.delete(event.pointerId);
+      if (!pointers.size) {
+        if (moved) suppressClickUntil = performance.now() + 350;
+        pan = pinch = null;
+        stage.classList.remove("is-panning");
+      } else if (pointers.size === 1) {
+        const [id, p] = [...pointers.entries()][0];
+        pan = { id, start: p, originX: offsetX, originY: offsetY, moved: false };
+        pinch = null;
+      }
+    };
+    stage.addEventListener("pointerup", endPointer);
+    stage.addEventListener("pointercancel", endPointer);
+    stage.addEventListener("dragstart", (event) => event.preventDefault());
+    fitButton.addEventListener("click", fit);
+    window.addEventListener("resize", fit);
+    requestAnimationFrame(fit);
+    return {
+      fit,
+      consumeDragClick() {
+        if (performance.now() >= suppressClickUntil) return false;
+        suppressClickUntil = 0;
+        return true;
+      },
+    };
+  }
+
+  if (page === "cross-stitch") {
+    const form = $("#cross-stitch-form");
+    const input = $("#image-input");
+    const zone = $("#dropzone");
+    const btn = $("#submit-btn");
+    const err = $("#form-error");
+    const preview = $("#image-preview");
+    let file = null;
+    const showError = (message) => { err.textContent = message; err.hidden = !message; };
+    const setFile = (next) => {
+      if (!next) return;
+      if (!/\.(png|jpe?g|webp|avif)$/i.test(next.name)) {
+        showError("Format non pris en charge : choisissez une image PNG, JPG, WebP ou AVIF.");
+        return;
+      }
+      if (next.size > 20 * 1024 * 1024) {
+        showError("Fichier trop volumineux (20 Mo maximum).");
+        return;
+      }
+      showError("");
+      file = next;
+      if (preview.src) URL.revokeObjectURL(preview.src);
+      preview.src = URL.createObjectURL(file);
+      $("#image-name").textContent = file.name;
+      $(".dz-empty", zone).hidden = true;
+      $(".dz-preview", zone).hidden = false;
+      zone.classList.add("filled");
+      btn.disabled = false;
+    };
+    input.addEventListener("change", () => setFile(input.files[0]));
+    zone.addEventListener("keydown", (event) => {
+      if (event.target === zone && ["Enter", " "].includes(event.key)) {
+        event.preventDefault();
+        input.click();
+      }
+    });
+    $("#image-clear").addEventListener("click", (event) => { event.preventDefault(); input.click(); });
+    ["dragenter", "dragover"].forEach((type) => zone.addEventListener(type, (event) => {
+      event.preventDefault(); zone.classList.add("over");
+    }));
+    ["dragleave", "drop"].forEach((type) => zone.addEventListener(type, (event) => {
+      event.preventDefault(); zone.classList.remove("over");
+    }));
+    zone.addEventListener("drop", (event) => setFile(event.dataTransfer.files[0]));
+    document.addEventListener("paste", (event) => setFile(event.clipboardData?.files[0]));
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!file || btn.disabled) return;
+      showError("");
+      btn.disabled = true;
+      btn.classList.add("loading");
+      const data = new FormData(form);
+      data.set("image", file);
+      try {
+        const response = await fetch(form.action, { method: "POST", body: data });
+        const json = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(json.error || "La création du motif a échoué.");
+        window.location.href = json.urls.page;
+      } catch (error) {
+        showError(error.message);
+        btn.disabled = false;
+        btn.classList.remove("loading");
+      }
+    });
+  }
+
   // --- Création ---
   if (page === "create") {
     const form = $("#create-form");
@@ -244,13 +421,17 @@
     if (!root) return;
     const tabs = $$(".segmented button", root);
     const imgs = $$(".stage img", root);
+    let zoom;
 
     const show = (view) => {
       tabs.forEach((t) => t.setAttribute("aria-selected", String(t.dataset.view === view)));
       imgs.forEach((i) => i.classList.toggle("shown", i.dataset.view === view));
+      if (zoom) requestAnimationFrame(zoom.fit);
     };
     tabs.forEach((t) => t.addEventListener("click", () => !t.disabled && show(t.dataset.view)));
     show(root.dataset.hasPhoto === "1" ? "photo" : root.dataset.hasRaw === "1" ? "raw" : "source");
+    zoom = setupStageNavigation($("#design-stage"), () => imgs.find((i) => i.classList.contains("shown")), $("#stage-fit"));
+    imgs.forEach((img) => img.addEventListener("load", () => zoom.fit()));
 
     if (root.dataset.status === "processing") {
       const poll = async () => {
@@ -393,6 +574,7 @@
     const loading = $("#editor-loading");
     const loadingText = $("#editor-loading-text");
     const loadingStep = $("#editor-loading-step");
+    const zoom = setupStageNavigation($("#editor-stage"), () => $("#editor-canvas"), $("#stage-fit"));
     let zmap = null, zw = 0, zh = 0;
     // Sélection : {type: "block", i} (toute une couleur, depuis la liste) ou {type: "region", j} (zone fermée cliquée)
     let target = null, selMask = null;
@@ -501,7 +683,7 @@
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(off, 0, 0, overlay.width, overlay.height);
     }
-    img.addEventListener("load", draw);
+    img.addEventListener("load", () => { draw(); zoom.fit(); });
     window.addEventListener("resize", draw);
 
     // Pixel de zone sous le pointeur (petite tolérance : les rangées de points laissent des interstices)
@@ -544,6 +726,7 @@
     overlay.addEventListener("mousemove", hover);
     overlay.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (zoom.consumeDragClick()) return;
       const hit = zoneAt(e.clientX, e.clientY);
       if (!hit) return closeMenu();
       let j = pending.findIndex((r) => r.mask[hit.p]);

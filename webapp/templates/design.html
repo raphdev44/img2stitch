@@ -17,13 +17,15 @@
       </form>
     </div>
     <p class="form-error" id="title-error" role="alert" hidden></p>
-    <p class="muted">{{ d.created_at | datefr }} · {{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }} demandée{{ 's' if d.n_colors > 1 }} · {{ bg_labels[d.background] }}{% if d.target_mm %} · cadre {{ '%g' % d.target_mm[0] }} × {{ '%g' % d.target_mm[1] }} mm{% endif %}</p>
+    <p class="muted">{{ d.created_at | datefr }} · {% if d.mode == 'cross_stitch' %}Pixel art · Point de croix{% if d.n_colors %} · {{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }}{% endif %}{% else %}{{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }} demandée{{ 's' if d.n_colors > 1 }}{% endif %} · {{ bg_labels[d.background] }}{% if d.target_mm %} · cadre {{ '%g' % d.target_mm[0] }} × {{ '%g' % d.target_mm[1] }} mm{% endif %}</p>
   </div>
   <div class="head-actions">
     {% if d.status == 'ready' %}
+    {% if d.mode != 'cross_stitch' %}
     <a class="btn-ghost" href="{{ url_for('web.edit', design_id=d.id) }}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg>Modifier le motif
     </a>
+    {% endif %}
     <span class="badge ok">Prêt</span>
     {% elif d.status == 'error' %}<span class="badge err">Erreur</span>
     {% else %}<span class="badge busy">En cours</span>{% endif %}
@@ -38,7 +40,7 @@
   <div class="card notice err">
     <strong>Le motif n'a pas pu être généré.</strong>
     <p>{{ d.error }}</p>
-    <a class="btn-primary inline" href="{{ url_for('web.create') }}">Essayer une autre image</a>
+    <a class="btn-primary inline" href="{{ url_for('web.create_cross_stitch' if d.mode == 'cross_stitch' else 'web.create') }}">Essayer une autre image</a>
   </div>
 {% else %}
 <div class="design-layout" id="design" data-id="{{ d.id }}" data-status="{{ d.status }}"
@@ -62,12 +64,17 @@
         {% endfor %}
       </div>
       {% endif %}
+      <button type="button" class="btn-ghost stage-fit" id="stage-fit" title="Recentrer et ajuster l'aperçu"
+              aria-label="Recentrer et ajuster l'aperçu à la zone d'affichage">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg>
+        Ajuster
+      </button>
     </div>
-    <div class="stage">
+    <div class="stage" id="design-stage">
       {% set v = d.photo_version %}
-      {% if d.has_photo %}<img data-view="photo" src="{{ url_for('web.design_file', design_id=d.id, name='preview_photo.png', v=v) }}" alt="Rendu réaliste de la broderie">{% endif %}
-      {% if d.has_raw %}<img data-view="raw" src="{{ url_for('web.design_file', design_id=d.id, name='preview_raw.png', v=v) }}" alt="Tracé des points">{% endif %}
-      <img data-view="source" src="{{ url_for('web.design_file', design_id=d.id, name='source.png') }}" alt="Image d'origine">
+      {% if d.has_photo %}<img data-view="photo" src="{{ url_for('web.design_file', design_id=d.id, name='preview_photo.png', v=v) }}" alt="Rendu réaliste de la broderie" draggable="false">{% endif %}
+      {% if d.has_raw %}<img data-view="raw" src="{{ url_for('web.design_file', design_id=d.id, name='preview_raw.png', v=v) }}" alt="Tracé des points" draggable="false">{% endif %}
+      <img data-view="source" src="{{ url_for('web.design_file', design_id=d.id, name='source.png') }}" alt="Image d'origine" draggable="false">
       <div class="stage-progress" id="photo-progress" hidden>
         <span class="spinner big"></span>
         <strong>Nouveau rendu réaliste…</strong>
@@ -89,12 +96,17 @@
       <h2>Caractéristiques</h2>
       <dl class="stats">
         <div><dt>Dimensions</dt><dd>{{ d.size_mm[0] }} × {{ d.size_mm[1] }} mm</dd></div>
+        {% if d.grid %}
+        <div><dt>Grille</dt><dd>{{ d.grid.columns }} × {{ d.grid.rows }} cases</dd></div>
+        <div><dt>Croix</dt><dd>{{ d.grid.crosses }}</dd></div>
+        <div><dt>Taille d'une croix</dt><dd>{{ '%g' % d.grid.cell_mm }} mm</dd></div>
+        {% endif %}
         <div><dt>Points</dt><dd>{{ '{:,}'.format(d.stats.stitches).replace(',', ' ') }}</dd></div>
         <div><dt>Changements de fil</dt><dd>{{ d.stats.color_changes }}</dd></div>
         <div><dt>Coupes</dt><dd>{{ d.stats.trims }}</dd></div>
       </dl>
       <h3>Fils</h3>
-      {% set editable = d.status == 'ready' %}
+      {% set editable = d.status == 'ready' and d.mode != 'cross_stitch' %}
       <ol class="threads" id="threads" data-recolor="{{ url_for('web.api_recolor', design_id=d.id) }}"
           data-merge="{{ url_for('web.api_merge', design_id=d.id) }}">
         {% for c in d.threads %}<li>

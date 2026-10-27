@@ -27,7 +27,7 @@ def _file_url(meta, name):
 def _public(meta):
     out = {k: meta.get(k) for k in ("id", "name", "created_at", "n_colors", "background", "target_mm",
                                      "status", "step", "error", "stats", "threads", "size_mm", "fabric",
-                                     "photo_error", "edit_error")}
+                                     "photo_error", "edit_error", "mode", "grid")}
     out["photo_rendering"] = bool(meta.get("photo_rendering"))
     out["urls"] = {
         "page": url_for("web.design", design_id=meta["id"]),
@@ -56,6 +56,26 @@ def gallery():
     return render_template("gallery.html", designs=store().list())
 
 
+@bp.get("/pixel-art")
+def create_cross_stitch():
+    return render_template("cross_stitch.html")
+
+
+@bp.post("/api/pixel-art")
+def api_create_cross_stitch():
+    image = request.files.get("image")
+    if image is None or not image.filename:
+        return jsonify(error="Aucune image envoyée."), 400
+    background = request.form.get("background", "outside")
+    if background not in BACKGROUND_MODES:
+        return jsonify(error="Option d'arrière-plan invalide."), 400
+    try:
+        design_id = store().create(image.stream, image.filename, 0, background, None, mode="cross_stitch")
+    except InvalidImage as exc:
+        return jsonify(error=str(exc)), 400
+    return jsonify(_public(store().get(design_id))), 202
+
+
 @bp.post("/api/motifs/<design_id>/supprimer")
 def api_delete(design_id):
     try:
@@ -76,7 +96,7 @@ def design(design_id):
 @bp.get("/motifs/<design_id>/edition")
 def edit(design_id):
     meta = store().get(design_id) or abort(404)
-    if meta["status"] != "ready":
+    if meta["status"] != "ready" or meta.get("mode") == "cross_stitch":
         return redirect(url_for("web.design", design_id=design_id))
     return render_template("edit.html", d=meta, zones=store().zones(design_id), fills=FILL_TYPES)
 

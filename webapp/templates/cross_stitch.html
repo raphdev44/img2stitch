@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Nouveau pixel art en point de croix{% endblock %}
+{% block page %}cross-stitch{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a href="{{ url_for('web.gallery') }}" class="back">Retour à la galerie</a>
+    <h1>Pixel art en point de croix</h1>
+  </div>
+</div>
+
+<form id="cross-stitch-form" class="create-card cross-create" action="{{ url_for('web.api_create_cross_stitch') }}" method="post" enctype="multipart/form-data">
+  <label class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Importer un pixel art">
+    <input type="file" name="image" id="image-input" accept="image/png,image/jpeg,image/webp,image/avif,.avif" hidden>
+    <div class="dz-empty">
+      <strong>Déposez votre pixel art</strong>
+      <span>PNG, JPG, WebP ou AVIF · 20 Mo max</span>
+    </div>
+    <div class="dz-preview" hidden>
+      <img id="image-preview" alt="Aperçu du pixel art">
+      <span class="dz-name" id="image-name"></span>
+      <button type="button" class="btn-ghost small" id="image-clear">Changer d'image</button>
+    </div>
+  </label>
+
+  <div class="options">
+    <fieldset class="field choices">
+      <legend>Arrière-plan</legend>
+      <label class="choice">
+        <input type="radio" name="background" value="outside" checked>
+        <span><strong>Supprimer le fond autour du motif</strong>
+          <small>Les zones de la même couleur à l'intérieur du motif sont conservées et brodées.</small></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="background" value="all">
+        <span><strong>Supprimer le fond et toutes les zones de sa couleur</strong>
+          <small>Les zones intérieures de la couleur du fond restent vides (tissu apparent).</small></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="background" value="keep">
+        <span><strong>Conserver le fond</strong>
+          <small>Toute l'image est brodée, fond compris.</small></span>
+      </label>
+    </fieldset>
+    <p class="form-error" id="form-error" role="alert" hidden></p>
+    <button type="submit" class="btn-primary" id="submit-btn" disabled>
+      <span class="btn-label">Générer le point de croix</span>
+      <span class="spinner" aria-hidden="true"></span>
+    </button>
+  </div>
+</form>
+{% endblock %}

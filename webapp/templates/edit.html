@@ -19,10 +19,17 @@
      data-status="{{ url_for('web.api_get', design_id=d.id) }}"
      data-zonemap="{{ url_for('web.design_file', design_id=d.id, name='zones.png', v=d.photo_version) }}">
   <section class="card stage-card">
-    <div class="stage editor-stage">
+    <div class="stage-toolbar edit-stage-toolbar">
+      <button type="button" class="btn-ghost stage-fit" id="stage-fit" title="Recentrer et ajuster l'aperçu"
+              aria-label="Recentrer et ajuster l'aperçu à la zone d'affichage">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg>
+        Ajuster
+      </button>
+    </div>
+    <div class="stage editor-stage" id="editor-stage">
       <div class="editor-canvas" id="editor-canvas">
         <img id="editor-img" src="{{ url_for('web.design_file', design_id=d.id, name=img_name, v=d.photo_version) }}"
-             alt="Aperçu du motif : cliquez sur une zone pour la modifier">
+             alt="Aperçu du motif : cliquez sur une zone pour la modifier" draggable="false">
         <canvas id="editor-overlay" aria-hidden="true"></canvas>
       </div>
       <div class="stage-progress" id="editor-loading">
