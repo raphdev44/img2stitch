@@ -101,6 +101,23 @@ class Sewer:
         for q in pts:
             self._line(self.cur, q, self.s.outline_stitch_mm)
 
+    def sew_path(self, pts, step=None):
+        """Pique le long d'une polyligne (rangée courbe) avec des points réguliers mesurés le long du tracé."""
+        step = step or min(self.s.max_stitch_mm, 2.0)
+        prev, acc = self.cur, 0.0
+        for q in pts:
+            seg = math.hypot(q[0] - prev[0], q[1] - prev[1])
+            while seg > 0 and acc + seg >= step:
+                t = (step - acc) / seg
+                prev = (prev[0] + (q[0] - prev[0]) * t, prev[1] + (q[1] - prev[1]) * t)
+                self._stitch(*prev)
+                seg = math.hypot(q[0] - prev[0], q[1] - prev[1])
+                acc = 0.0
+            acc += seg
+            prev = q
+        if math.hypot(pts[-1][0] - self.cur[0], pts[-1][1] - self.cur[1]) > 1e-6:
+            self._stitch(*pts[-1])
+
 
 # ---------------------------------------------------------------------------------------------
 def _nearest_candidates(cur, arr0, arr1, k=6):
@@ -147,7 +164,12 @@ def plan_fill(sw: Sewer, runs):
             r = rs[i]
             entry, exit_ = (r["p0"], r["p1"]) if e == 0 else (r["p1"], r["p0"])
             sw.move_to(entry)
-            sw.sew_run(exit_, (r["row"] * 0.618034) % 1.0)
+            if "path" in r:  # rangée courbe (ondulé, zigzag)
+                sw.sew_path((r["path"] if e == 0 else r["path"][::-1])[1:])
+            elif "max_len" in r:  # satin : un seul point d'un bord à l'autre
+                sw._line(sw.cur, exit_, r["max_len"])
+            else:
+                sw.sew_run(exit_, (r["row"] * 0.618034) % 1.0)
             left[i] = False
             if not left.any():
                 break

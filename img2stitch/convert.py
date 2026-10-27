@@ -7,7 +7,7 @@ import numpy as np
 import pyembroidery as pe
 from .config import Settings
 from .preprocess import load_and_quantize, _embroidered_pixels
-from .fill import fill_runs
+from .fill import fill_runs, zone_fill
 from .outline import overlap_masks, contours_mm
 from .planner import Sewer, plan_fill, plan_outline
 
@@ -15,15 +15,16 @@ SIZE_MARGIN_MM = 0.2  # les formats arrondissent les coordonnées au 1/10 mm : m
 
 
 def _center_on_origin(pattern):
-    """Translate le motif pour que le centre de sa boîte englobante soit en (0,0)."""
+    """Translate le motif pour que le centre de sa boîte englobante soit en (0,0). Retourne la translation."""
     pts = [(x, y) for x, y, c in pattern.stitches if (c & pe.COMMAND_MASK) in (pe.STITCH, pe.JUMP)]
     if not pts:
-        return
+        return 0.0, 0.0
     xs, ys = zip(*pts)
     cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
     for st in pattern.stitches:
         st[0] -= cx
         st[1] -= cy
+    return cx, cy
 
 
 def _stitch_size_mm(pattern):
@@ -37,6 +38,16 @@ def _scale(pattern, f):
     for st in pattern.stitches:
         st[0] *= f
         st[1] *= f
+    frame = getattr(pattern, "img2stitch_frame", None)
+    if frame:
+        frame["scale"] *= f
+
+
+def pattern_to_image(frame, x, y):
+    """Point du motif (1/10 mm) -> position (u, v) dans l'image source, en fraction de sa largeur / hauteur."""
+    px = (x / frame["scale"] + frame["cx"]) * frame["ppm"] / 10
+    py = (y / frame["scale"] + frame["cy"]) * frame["ppm"] / 10
+    return px / frame["w"], py / frame["h"]
 
 
 def natural_size_mm(src, settings: Settings = None):
@@ -91,6 +102,8 @@ def _build_pattern(path, s: Settings):
         pattern.end()
         return pattern
 
+    frame = {"w": masks[0].shape[1], "h": masks[0].shape[0], "ppm": px_per_mm, "cx": 0.0, "cy": 0.0, "scale": 1.0}
+    palette, masks, regions = _split_regions(palette, masks, s.region_overrides, px_per_mm)
     fill_masks = overlap_masks(masks, px_per_mm, s.overlap_mm)
 
     # later[i] = tout ce qui sera piqué APRÈS la couleur i : un fil qui passe là sera recouvert
@@ -102,26 +115,89 @@ def _build_pattern(path, s: Settings):
 
     sw = Sewer(pattern, s, px_per_mm)
     first = True
+    zones = []  # (couleur d'origine, index de la retouche de zone ou None) de chaque bloc, dans l'ordre de piqué
     tol = np.ones((3, 3), np.uint8)  # tolérance d'1 px : les contours sont sur le bord des formes
     for i, (rgb, mask, fmask) in enumerate(zip(palette, masks, fill_masks)):
-        runs = fill_runs(fmask, px_per_mm, s.row_spacing_mm, s.fill_angle_deg, s.min_area_mm2)
+        if regions[i] is None:
+            color, kind = _zone_override(rgb, s.zone_overrides)
+        else:
+            _, _, r_color, r_kind = s.region_overrides[regions[i]]
+            color, kind = tuple(r_color or rgb), r_kind or "tatami"
+        passes = zone_fill(kind, fmask, px_per_mm, s)
         loops = contours_mm(mask, px_per_mm, s.outline_simplify_mm, s.min_area_mm2) if s.outline else []
-        if not runs and not loops:
+        if not any(data for _, data in passes) and not loops:
             continue
         if not first:
             pattern.add_command(pe.COLOR_CHANGE)
         first = False
-        pattern.add_thread({"color": (rgb[0] << 16) | (rgb[1] << 8) | rgb[2]})
+        pattern.add_thread({"color": (color[0] << 16) | (color[1] << 8) | color[2]})
+        zones.append((tuple(rgb), regions[i]))
 
         hidden = cv2.dilate((fmask | later[i]).astype(np.uint8), tol).astype(bool)
         sw.new_color(hidden, later[i])
-        plan_fill(sw, runs)
+        for what, data in passes:
+            if what == "runs":
+                plan_fill(sw, data)
+            elif data:
+                plan_outline(sw, data, 1)
         if loops:
             plan_outline(sw, loops, s.outline_passes)
     pattern.end()
+    pattern.img2stitch_zones = zones
     if s.center_on_origin:
-        _center_on_origin(pattern)
+        frame["cx"], frame["cy"] = _center_on_origin(pattern)
+    pattern.img2stitch_frame = frame
     return pattern
+
+
+def _split_regions(palette, masks, region_overrides, px_per_mm, tol=40.0, search_mm=0.8):
+    """Isole chaque zone fermée visée par une retouche de zone ((u, v), couleur d'origine, fil, motif) :
+    la forme connexe de cette couleur qui contient le point (u, v) devient un bloc à part, piqué juste après
+    le reste de sa couleur. Retourne (palette, masques, index de retouche ou None pour chaque bloc)."""
+    if not region_overrides:
+        return palette, masks, [None] * len(masks)
+    h, w = masks[0].shape
+    rest = [m.copy() for m in masks]
+    extra = [[] for _ in masks]
+    r = max(1, round(search_mm * px_per_mm))
+    for ri, ((u, v), source, _, _) in enumerate(region_overrides):
+        d = [math.dist(source, c) for c in palette]
+        k = int(np.argmin(d))
+        if d[k] > tol:
+            continue
+        x, y = min(w - 1, max(0, int(u * w))), min(h - 1, max(0, int(v * h)))
+        _, labels = cv2.connectedComponents(rest[k].astype(np.uint8), connectivity=8)
+        lab = labels[y, x]
+        if not lab:  # point cliqué entre deux rangées ou sur un bord : forme la plus proche, tout près
+            win = labels[max(0, y - r):y + r + 1, max(0, x - r):x + r + 1]
+            ys, xs = np.nonzero(win)
+            if not len(ys):
+                continue
+            j = int(np.argmin((ys - min(y, r)) ** 2 + (xs - min(x, r)) ** 2))
+            lab = win[ys[j], xs[j]]
+        comp = labels == lab
+        rest[k] &= ~comp
+        extra[k].append((comp, ri))
+    out_p, out_m, out_r = [], [], []
+    for k, rgb in enumerate(palette):
+        for m, ri in [(rest[k], None)] + extra[k]:
+            if m.any():
+                out_p.append(rgb)
+                out_m.append(m)
+                out_r.append(ri)
+    return out_p, out_m, out_r
+
+
+def _zone_override(rgb, overrides, tol=40.0):
+    """(couleur de fil, motif de remplissage) d'une zone, d'après la retouche dont la couleur d'origine est la plus proche."""
+    best, best_d = None, tol
+    for source, color, kind in overrides:
+        d = math.dist(source, rgb)
+        if d <= best_d:
+            best, best_d = (color, kind), d
+    if best is None:
+        return tuple(rgb), "tatami"
+    return tuple(best[0] or rgb), best[1] or "tatami"
 
 
 def pattern_stats(pattern):

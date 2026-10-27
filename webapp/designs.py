@@ -5,18 +5,23 @@ import math
 import os
 import re
 import threading
+import time
+import unicodedata
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
+import cv2
+import numpy as np
 import pyembroidery as pe
 from PIL import Image, ImageOps
 from werkzeug.utils import secure_filename
 
 from img2stitch import (Settings, color_palettes, estimate_colors, image_to_pattern, natural_size_mm,
                         render_photo_preview, render_raw_preview)
-from img2stitch.convert import SIZE_MARGIN_MM, pattern_stats
+from img2stitch.convert import SIZE_MARGIN_MM, _zone_override, pattern_stats, pattern_to_image
+from img2stitch.fill import FILL_TYPES
 from img2stitch.photo import FABRICS, stitch_bbox_mm
 
 log = logging.getLogger(__name__)
@@ -35,8 +40,10 @@ FORMATS = {
 }
 SOURCE, RAW, PHOTO, THUMB, META = "source.png", "preview_raw.png", "preview_photo.png", "thumb.jpg", "meta.json"
 PATTERN_DATA = "pattern.json"  # points et couleurs exacts, pour refaire un aperçu sans régénérer le motif
-PUBLIC_FILES = {SOURCE, RAW, PHOTO, THUMB}
+ZONES = "zones.png"  # carte des zones (index du bloc de couleur + 1), même cadrage que l'aperçu réaliste
+PUBLIC_FILES = {SOURCE, RAW, PHOTO, THUMB, ZONES}
 MIN_COLORS, MAX_COLORS = 1, 12
+MAX_NAME = 80
 MIN_SIZE_MM, MAX_SIZE_MM, DEFAULT_SIZE_MM = 10, 400, 100
 MAX_PIXELS = 40_000_000
 ACCEPTED_FORMATS = {"PNG", "JPEG", "WEBP", "AVIF"}
@@ -98,6 +105,79 @@ class DesignStore:
             return None
         return d / f"pattern.{fmt}"
 
+    # --- Nom du motif ---
+    def rename(self, design_id, name):
+        d = self.dir(design_id)
+        with self._modify_lock:
+            meta = self._read(d)
+            if meta.get("status") == "processing":  # la génération réécrit meta.json en entier
+                raise InvalidImage("Le motif est en cours de génération, réessayez dans un instant.")
+            meta["name"] = name
+            self._write(d, meta)
+
+    # --- Édition des zones ---
+    def zones(self, design_id):
+        """Blocs de couleur du motif, dans l'ordre de piqué : [{"source", "color", "fill", "region"}, ...].
+        "region" est l'index de la retouche de zone fermée (meta["regions"]) qui a créé le bloc, sinon None."""
+        meta = self.get(design_id)
+        if meta.get("zones"):
+            return [dict(z, region=z.get("region")) for z in meta["zones"]]
+        return [{"source": c, "color": c, "fill": "tatami", "region": None} for c in meta.get("threads") or []]
+
+    def zone_map_path(self, design_id):
+        d = self.dir(design_id)
+        if d is None:
+            return None
+        if not (d / ZONES).is_file():  # motifs créés avant l'éditeur
+            _write_atomic(d / ZONES, lambda p: _render_zone_map(_load_pattern(d), p))
+        return d / ZONES
+
+    def apply_edits(self, design_id, edits, new_regions=()):
+        """Enregistre la couleur et le motif de chaque bloc, ajoute les retouches de zones fermées
+        (point cliqué en fraction de l'aperçu), puis régénère le motif."""
+        d = self.dir(design_id)
+        current = self.zones(design_id)
+        if len(edits) != len(current):
+            raise InvalidImage("Les zones ne correspondent plus au motif : rechargez la page.")
+        meta = self.get(design_id)
+        regions = [dict(r) for r in meta.get("regions") or []]
+        zones = []
+        for z, e in zip(current, edits):
+            if z["region"] is not None and z["region"] < len(regions):
+                regions[z["region"]].update(color=e["color"], fill=e["fill"])
+            zones.append({"source": z["source"], "color": e["color"], "fill": e["fill"], "region": z["region"]})
+        new_regions = [r for r in new_regions if current[r["block"]]["region"] is None]
+        if new_regions:
+            frame, (x0, y0, x1, y1) = self._frame_and_bbox(d, meta)
+            for r in new_regions:
+                # même cadrage que l'aperçu réaliste et la carte des zones : boîte des points + 6 mm de marge
+                x = (x0 - 6 + r["fx"] * (x1 - x0 + 12)) * 10
+                y = (y0 - 6 + r["fy"] * (y1 - y0 + 12)) * 10
+                u, v = pattern_to_image(frame, x, y)
+                regions.append({"source": current[r["block"]]["source"], "u": float(u), "v": float(v),
+                                "color": r["color"], "fill": r["fill"]})
+        # Une zone revenue aux réglages de sa couleur n'a plus besoin d'être isolée
+        whole = {z["source"]: z for z in zones if z["region"] is None}
+        regions = [r for r in regions if not (r["source"] in whole and whole[r["source"]]["color"] == r["color"]
+                                              and whole[r["source"]]["fill"] == r["fill"])]
+        with self._modify_lock:
+            meta = self._read(d)
+            if meta.get("status") != "ready" or meta.get("photo_rendering"):
+                raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
+            meta.update(zones_previous=meta.get("zones"), regions_previous=meta.get("regions"),
+                        zones=[z for z in zones if z["region"] is None], regions=regions, editing=True,
+                        status="processing", step="Application des modifications", error=None, edit_error=None)
+            self._write(d, meta)
+        self._pool.submit(self._generate, d)
+
+    def _frame_and_bbox(self, d, meta):
+        """Repère motif -> image et boîte des points (mm) du motif affiché."""
+        if meta.get("frame"):
+            return meta["frame"], stitch_bbox_mm(_load_pattern(d))
+        # Motif antérieur à l'enregistrement du repère : on le recalcule (même image, mêmes réglages)
+        pattern = image_to_pattern(str(d / SOURCE), _settings(meta))
+        return pattern.img2stitch_frame, stitch_bbox_mm(pattern)
+
     # --- Création ---
     def create(self, stream, filename, n_colors, background, target_mm, excluded=()):
         img = _load_image(stream)
@@ -126,11 +206,7 @@ class DesignStore:
     def _generate(self, d):
         meta = self._read(d)
         try:
-            bg, scope = BACKGROUND_MODES[meta["background"]]
-            max_w, max_h = meta["target_mm"]
-            s = Settings(n_colors=meta["n_colors"], background=bg, background_scope=scope,
-                         max_width_mm=max_w, max_height_mm=max_h,
-                         exclude_colors=_exclude_setting(meta.get("excluded", [])))
+            s = _settings(meta)
             pattern = image_to_pattern(str(d / SOURCE), s)
             stats = pattern_stats(pattern)
             if stats["stitches"] == 0:
@@ -141,25 +217,43 @@ class DesignStore:
             for fmt in FORMATS:
                 pe.write(pattern, str(d / f"pattern.{fmt}"), opts)
             _write_atomic(d / PATTERN_DATA, lambda p: _save_pattern(pattern, p))
+            _write_atomic(d / ZONES, lambda p: _render_zone_map(pattern, p))
 
             x0, y0, x1, y1 = stitch_bbox_mm(pattern)
             _write_atomic(d / RAW, lambda p: render_raw_preview(pattern, p))
+            zones, regions = _zones_of(pattern, s, meta.get("regions") or [])
+            frame = {k: float(v) for k, v in pattern.img2stitch_frame.items()}
             self._update(
                 d, meta,
                 step="Rendu réaliste",
                 stats=stats,
                 threads=["#%06x" % (t.color & 0xFFFFFF) for t in pattern.threadlist],
+                zones=zones,
+                regions=regions,
+                frame=frame,
+                zones_previous=zones,  # fichiers de broderie écrits : la retouche est acquise
+                regions_previous=regions,
                 size_mm=[round(float(x1 - x0), 1), round(float(y1 - y0), 1)],
             )
 
-            _write_atomic(d / PHOTO, lambda p: render_photo_preview(pattern, p, fabric=DEFAULT_FABRIC))
+            fabric = meta.get("fabric", DEFAULT_FABRIC)
+            _write_atomic(d / PHOTO, lambda p: render_photo_preview(pattern, p, fabric=fabric))
             _make_thumb(d)
-            self._update(d, meta, status="ready", step=None)
+            self._update(d, meta, status="ready", step=None, editing=False, zones_previous=None,
+                         regions_previous=None, photo_version=meta.get("photo_version", 0) + 1)
         except InvalidImage as e:
-            self._update(d, meta, status="error", step=None, error=str(e))
+            self._fail(d, meta, str(e))
         except Exception:
             log.exception("Échec de génération pour %s", d.name)
-            self._update(d, meta, status="error", step=None, error="La génération du motif a échoué.")
+            self._fail(d, meta, "La génération du motif a échoué.")
+
+    def _fail(self, d, meta, message):
+        if meta.get("editing"):  # une retouche qui échoue ne doit pas rendre le motif inutilisable
+            self._update(d, meta, status="ready", step=None, editing=False, zones=meta.get("zones_previous"),
+                         regions=meta.get("regions_previous"), zones_previous=None, regions_previous=None,
+                         edit_error=message)
+        else:
+            self._update(d, meta, status="error", step=None, error=message)
 
     # --- Tissu de l'aperçu réaliste ---
     def set_fabric(self, design_id, fabric):
@@ -200,7 +294,9 @@ class DesignStore:
         for d in self.root.iterdir():
             if (d / META).is_file():
                 meta = self._read(d)
-                if meta.get("status") == "processing":
+                if meta.get("status") == "processing" and meta.get("editing"):
+                    self._fail(d, meta, "Modification interrompue (redémarrage du serveur).")
+                elif meta.get("status") == "processing":
                     self._update(d, meta, status="error", step=None, error="Génération interrompue (redémarrage du serveur).")
                 elif meta.get("photo_rendering"):
                     self._update(d, meta, photo_rendering=False)
@@ -224,6 +320,21 @@ class DesignStore:
 _HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
+def clean_name(raw):
+    """Nom saisi par l'utilisateur : espaces normalisés, caractères de contrôle retirés, 1 à 80 caractères."""
+    name = " ".join("".join(ch for ch in str(raw or "") if unicodedata.category(ch)[0] != "C").split())
+    if not name or len(name) > MAX_NAME:
+        raise InvalidImage(f"Le nom doit contenir entre 1 et {MAX_NAME} caractères.")
+    return name
+
+
+def export_filename(name, ext):
+    """Nom de fichier d'export sûr pour toutes les brodeuses : ASCII (accents retirés), lettres, chiffres, - et _."""
+    ascii_ = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    stem = re.sub(r"[^A-Za-z0-9_-]+", "_", ascii_).strip("_-")[:60].rstrip("_-") or "motif"
+    return f"{stem}.{ext}"
+
+
 def parse_exclusions(raw):
     """JSON envoyé par le formulaire -> [{"color": "#rrggbb", "others": ["#rrggbb", ...]}, ...] validé."""
     if not raw:
@@ -242,8 +353,7 @@ def parse_exclusions(raw):
 
 
 def _exclude_setting(excluded):
-    rgb = lambda h: tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
-    return tuple((rgb(e["color"]), tuple(rgb(o) for o in e["others"])) for e in excluded)
+    return tuple((_rgb(e["color"]), tuple(_rgb(o) for o in e["others"])) for e in excluded)
 
 
 def analyse_image(stream, background, excluded=()):
@@ -261,6 +371,83 @@ def analyse_image(stream, background, excluded=()):
                 for n, pal in color_palettes(img, background=bg, bg_scope=scope, max_colors=MAX_COLORS,
                                              exclude=ex).items()}
     return {"colors": colors, "width_mm": fit(w), "height_mm": fit(h), "palettes": palettes}
+
+
+def _hex(c):
+    return "#%02x%02x%02x" % tuple(c)
+
+
+def _rgb(h):
+    return tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
+
+
+def _settings(meta):
+    bg, scope = BACKGROUND_MODES[meta["background"]]
+    max_w, max_h = meta.get("target_mm") or (None, None)  # motifs antérieurs au cadre en mm
+    return Settings(n_colors=meta["n_colors"], background=bg, background_scope=scope,
+                    max_width_mm=max_w, max_height_mm=max_h,
+                    exclude_colors=_exclude_setting(meta.get("excluded", [])),
+                    zone_overrides=_zone_setting(meta.get("zones") or []),
+                    region_overrides=tuple(((r["u"], r["v"]), _rgb(r["source"]), _rgb(r["color"]), r["fill"])
+                                           for r in meta.get("regions") or []))
+
+
+def _zone_setting(zones):
+    """Blocs de meta.json -> Settings.zone_overrides (couleurs entières qui diffèrent du défaut)."""
+    return tuple((_rgb(z["source"]), _rgb(z["color"]), z["fill"]) for z in zones
+                 if z.get("region") is None and (z["color"] != z["source"] or z["fill"] != "tatami"))
+
+
+def _zones_of(pattern, s, regions):
+    """Blocs du motif généré et retouches de zones réellement appliquées (réindexées)."""
+    used = sorted({ri for _, ri in getattr(pattern, "img2stitch_zones", []) if ri is not None})
+    new_index = {ri: k for k, ri in enumerate(used)}
+    out = []
+    for src, ri in getattr(pattern, "img2stitch_zones", []):
+        if ri is None:
+            color, kind = _zone_override(src, s.zone_overrides)
+            out.append({"source": _hex(src), "color": _hex(color), "fill": kind, "region": None})
+        else:
+            r = regions[ri]
+            out.append({"source": _hex(src), "color": r["color"], "fill": r["fill"], "region": new_index[ri]})
+    return out, [regions[ri] for ri in used]
+
+
+def parse_edits(payload, n_zones):
+    """Retouches envoyées par l'éditeur -> (blocs [{"color", "fill"}], zones fermées [{"block", "fx", "fy", "color", "fill"}])."""
+    payload = payload if isinstance(payload, dict) else {}
+    items, regions = payload.get("zones"), payload.get("regions") or []
+    valid = lambda it: (isinstance(it, dict) and isinstance(it.get("color"), str) and _HEX_RE.match(it["color"])
+                        and it.get("fill") in FILL_TYPES)
+    ok = (isinstance(items, list) and len(items) == n_zones and all(valid(it) for it in items)
+          and isinstance(regions, list) and len(regions) <= 200 and all(
+              valid(r) and isinstance(r.get("block"), int) and 0 <= r["block"] < n_zones
+              and all(isinstance(r.get(k), (int, float)) and 0 <= r[k] <= 1 for k in ("fx", "fy")) for r in regions))
+    if not ok:
+        raise InvalidImage("Modifications invalides.")
+    return ([{"color": it["color"].lower(), "fill": it["fill"]} for it in items],
+            [{"block": r["block"], "fx": float(r["fx"]), "fy": float(r["fy"]), "color": r["color"].lower(),
+              "fill": r["fill"]} for r in regions])
+
+
+def _render_zone_map(pattern, path, ppm=5, margin_mm=6):
+    """Carte des zones : chaque bloc de couleur dessiné avec la valeur (index + 1), cadrage identique à
+    render_photo_preview pour retrouver la zone cliquée sur l'aperçu par simple proportion."""
+    x0, y0, x1, y1 = stitch_bbox_mm(pattern)
+    W, H = int((x1 - x0 + 2 * margin_mm) * ppm), int((y1 - y0 + 2 * margin_mm) * ppm)
+    zmap = np.zeros((H, W), np.uint8)
+    px = lambda x, y: (round((x / 10 - x0 + margin_mm) * ppm), round((y / 10 - y0 + margin_mm) * ppm))
+    ci, last = 0, None
+    width = max(2, round(0.7 * ppm))
+    for x, y, cmd in pattern.stitches:
+        c = cmd & pe.COMMAND_MASK
+        cur = px(x, y)
+        if c == pe.STITCH and last is not None:
+            cv2.line(zmap, last, cur, ci + 1, width)
+        elif c == pe.COLOR_CHANGE:
+            ci += 1
+        last = cur
+    Image.fromarray(zmap, "L").save(path, "PNG")
 
 
 def _save_pattern(pattern, path):
@@ -296,7 +483,14 @@ def _write_atomic(path, write):
     """Écrit via un fichier temporaire puis renomme : le fichier final n'existe jamais à moitié écrit."""
     tmp = path.with_name(f"{path.stem}.tmp{path.suffix}")
     write(str(tmp))
-    os.replace(tmp, path)
+    for attempt in range(20):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:  # Windows : fichier en cours de lecture (navigateur, téléchargement)
+            if attempt == 19:
+                raise
+            time.sleep(0.15)
 
 
 def _load_image(stream):

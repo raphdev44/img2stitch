@@ -5,13 +5,34 @@
 <div class="page-head">
   <div>
     <a href="{{ url_for('web.gallery') }}" class="back">← Galerie</a>
-    <h1>{{ d.name }}</h1>
+    <div class="title-edit" id="title-edit" data-url="{{ url_for('web.api_rename', design_id=d.id) }}">
+      <h1 id="design-title">{{ d.name }}</h1>
+      <button type="button" class="icon-btn" id="title-edit-btn" title="Renommer le motif" aria-label="Renommer le motif">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg>
+      </button>
+      <form class="title-form" id="title-form" hidden>
+        <input type="text" id="title-input" maxlength="80" aria-label="Nom du motif" required>
+        <button type="submit" class="btn-primary inline">Enregistrer</button>
+        <button type="button" class="btn-ghost" id="title-cancel">Annuler</button>
+      </form>
+    </div>
+    <p class="form-error" id="title-error" role="alert" hidden></p>
     <p class="muted">{{ d.created_at | datefr }} · {{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }} demandée{{ 's' if d.n_colors > 1 }} · {{ bg_labels[d.background] }}{% if d.target_mm %} · cadre {{ '%g' % d.target_mm[0] }} × {{ '%g' % d.target_mm[1] }} mm{% endif %}</p>
   </div>
-  {% if d.status == 'ready' %}<span class="badge ok">Prêt</span>
-  {% elif d.status == 'error' %}<span class="badge err">Erreur</span>
-  {% else %}<span class="badge busy">En cours</span>{% endif %}
+  <div class="head-actions">
+    {% if d.status == 'ready' %}
+    <a class="btn-ghost" href="{{ url_for('web.edit', design_id=d.id) }}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg>Modifier le motif
+    </a>
+    <span class="badge ok">Prêt</span>
+    {% elif d.status == 'error' %}<span class="badge err">Erreur</span>
+    {% else %}<span class="badge busy">En cours</span>{% endif %}
+  </div>
 </div>
+
+{% if d.status == 'ready' and d.edit_error %}
+  <div class="card notice err"><strong>Les dernières modifications n'ont pas pu être appliquées.</strong><p>{{ d.edit_error }}</p></div>
+{% endif %}
 
 {% if d.status == 'error' %}
   <div class="card notice err">

@@ -206,6 +206,39 @@
 
   // --- Détail d'un motif ---
   if (page === "design") {
+    // Renommer le motif (crayon à côté du titre)
+    const titleBox = $("#title-edit");
+    if (titleBox) {
+      const h1 = $("#design-title"), form = $("#title-form"), input = $("#title-input");
+      const editBtn = $("#title-edit-btn"), err = $("#title-error");
+      const toggle = (on) => {
+        form.hidden = !on;
+        h1.hidden = editBtn.hidden = on;
+        err.hidden = true;
+        if (on) { input.value = h1.textContent; input.focus(); input.select(); }
+      };
+      editBtn.addEventListener("click", () => toggle(true));
+      $("#title-cancel").addEventListener("click", () => toggle(false));
+      input.addEventListener("keydown", (e) => { if (e.key === "Escape") toggle(false); });
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+          const res = await fetch(titleBox.dataset.url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: input.value }),
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(json.error || "Le nom n'a pas pu être enregistré.");
+          h1.textContent = json.name;
+          document.title = `${json.name} · img2stitch`;
+          toggle(false);
+        } catch (ex) {
+          err.textContent = ex.message;
+          err.hidden = false;
+        }
+      });
+    }
     const root = $("#design");
     if (!root) return;
     const tabs = $$(".segmented button", root);
@@ -291,5 +324,291 @@
   // --- Galerie : rafraîchit tant que des motifs sont en cours ---
   if (page === "gallery" && $(".tile .badge.busy")) {
     setTimeout(() => window.location.reload(), 4000);
+  }
+
+  // --- Édition d'un motif : clic sur une zone -> couleur / motif de remplissage ---
+  if (page === "edit") {
+    const root = $("#editor");
+    const { zones, fills: fillList } = JSON.parse($("#editor-data").textContent);
+    const fills = Object.fromEntries(fillList);
+    const edits = zones.map((z) => ({ color: z.color, fill: z.fill }));
+    const img = $("#editor-img");
+    const overlay = $("#editor-overlay");
+    const list = $("#zone-list");
+    const menu = $("#zone-menu");
+    const applyBtn = $("#edit-apply");
+    const resetBtn = $("#edit-reset");
+    const errEl = $("#edit-error");
+    let zmap = null, zw = 0, zh = 0;
+    // Sélection : {type: "block", i} (toute une couleur, depuis la liste) ou {type: "region", j} (zone fermée cliquée)
+    let target = null, selMask = null;
+    const pending = [];  // nouvelles zones fermées : {block, fx, fy, color, fill, mask}
+
+    // Aperçus des motifs de remplissage (SVG statiques)
+    const FILL_ICONS = {
+      tatami: '<path d="M2 14 14 2M2 22 22 2M10 22l12-12M2 6l4-4M18 22l4-4"/>',
+      tatami_h: '<path d="M3 5h18M3 9h18M3 13h18M3 17h18M3 21h18"/>',
+      tatami_v: '<path d="M5 3v18M9 3v18M13 3v18M17 3v18M21 3v18"/>',
+      cross: '<path d="M2 14 14 2M2 22 22 2M10 22l12-12M2 10 14 22M2 2l20 20M10 2l12 12"/>',
+      satin: '<path d="M4 3v18M6 3v18M8 3v18M10 3v18M12 3v18M14 3v18M16 3v18M18 3v18M20 3v18"/>',
+      contour: '<rect x="3" y="3" width="18" height="18" rx="3"/><rect x="7" y="7" width="10" height="10" rx="2"/><rect x="11" y="11" width="2" height="2"/>',
+      wave: '<path d="M2 6q2.5-3 5 0t5 0 5 0 5 0M2 12q2.5-3 5 0t5 0 5 0 5 0M2 18q2.5-3 5 0t5 0 5 0 5 0"/>',
+      zigzag: '<path d="m2 7 3-3 3 3 3-3 3 3 3-3 3 3 3-3M2 13l3-3 3 3 3-3 3 3 3-3 3 3 3-3M2 19l3-3 3 3 3-3 3 3 3-3 3 3 3-3"/>',
+      none: '<rect x="3" y="3" width="18" height="18" rx="3" stroke-dasharray="3 2.5"/>',
+    };
+    const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${FILL_ICONS[k] || ""}</svg>`;
+    const changed = (i) => edits[i].color !== zones[i].color || edits[i].fill !== zones[i].fill;
+    const regionChanged = (r) => r.color !== edits[r.block].color || r.fill !== edits[r.block].fill;
+    const rgb = (h) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16));
+    const cur = () => (target?.type === "block" ? edits[target.i] : target ? pending[target.j] : null);
+    const isSel = (t) => target && t.type === target.type && (t.i ?? t.j) === (target.i ?? target.j);
+    const blockLabel = (i) => (zones[i].region !== null ? `Zone isolée ${i + 1}` : `Couleur ${i + 1}`);
+
+    function row(t, label, base, now, isChanged) {
+      const li = document.createElement("li");
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "zone-row" + (isSel(t) ? " selected" : "") + (isChanged ? " changed" : "");
+      const was = now.color !== base.color ? `<span class="swatch was" style="--c:${base.color}"></span><span class="arrow">→</span>` : "";
+      b.innerHTML = `${was}<span class="swatch" style="--c:${now.color}"></span>
+        <span class="zone-text"><strong>${label}</strong><small>${fills[now.fill]}</small></span>${icon(now.fill)}`;
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const r = b.getBoundingClientRect();
+        select(t, r.left + window.scrollX - 8, r.bottom + window.scrollY + 6);
+      });
+      li.append(b);
+      return li;
+    }
+
+    // -- liste : couleurs entières, puis zones fermées nouvellement retouchées -------------
+    function renderList() {
+      const items = zones.map((z, i) => row({ type: "block", i }, blockLabel(i), z, edits[i], changed(i)));
+      pending.forEach((r, j) => {
+        if (regionChanged(r) || isSel({ type: "region", j })) {
+          items.push(row({ type: "region", j }, `Zone fermée (${blockLabel(r.block).toLowerCase()})`, edits[r.block], r, true));
+        }
+      });
+      list.replaceChildren(...items);
+      const any = zones.some((_, i) => changed(i)) || pending.some(regionChanged);
+      applyBtn.disabled = !any;
+      resetBtn.disabled = !any;
+    }
+
+    // -- carte des zones et calque d'aperçu -------------------------------------------------
+    const zimg = new Image();
+    zimg.onload = () => {
+      zw = zimg.naturalWidth; zh = zimg.naturalHeight;
+      const c = document.createElement("canvas");
+      c.width = zw; c.height = zh;
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(zimg, 0, 0);
+      const px = ctx.getImageData(0, 0, zw, zh).data;
+      zmap = new Uint8Array(zw * zh);
+      for (let i = 0; i < zmap.length; i++) zmap[i] = px[i * 4];
+      $("#editor-loading").hidden = true;
+      draw();
+    };
+    zimg.onerror = () => { $("#editor-loading").hidden = true; showError("Impossible de charger les zones du motif."); };
+    zimg.src = root.dataset.zonemap;
+
+    function draw() {
+      if (!zmap || !img.complete) return;
+      const r = img.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      overlay.width = Math.round(r.width * dpr);
+      overlay.height = Math.round(r.height * dpr);
+      const off = document.createElement("canvas");
+      off.width = zw; off.height = zh;
+      const octx = off.getContext("2d");
+      const data = octx.createImageData(zw, zh);
+      const cols = edits.map((e, i) => (e.color !== zones[i].color ? rgb(e.color) : null));
+      const regs = pending.filter((r) => r.color !== zones[r.block].color).map((r) => [r.mask, rgb(r.color)]);
+      for (let p = 0; p < zmap.length; p++) {
+        const z = zmap[p] - 1;
+        let a = 0, R = 0, G = 0, B = 0;
+        if (z >= 0 && cols[z]) [R, G, B, a] = [...cols[z], 210];
+        for (const [m, c] of regs) if (m[p]) [R, G, B, a] = [...c, 210];
+        if (selMask && !selMask[p]) {
+          if (a) { R *= 0.6; G *= 0.6; B *= 0.6; } else { a = 110; }
+        }
+        const o = p * 4;
+        data.data[o] = R; data.data[o + 1] = G; data.data[o + 2] = B; data.data[o + 3] = a;
+      }
+      octx.putImageData(data, 0, 0);
+      const ctx = overlay.getContext("2d");
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(off, 0, 0, overlay.width, overlay.height);
+    }
+    img.addEventListener("load", draw);
+    window.addEventListener("resize", draw);
+
+    // Pixel de zone sous le pointeur (petite tolérance : les rangées de points laissent des interstices)
+    function zoneAt(clientX, clientY) {
+      if (!zmap) return null;
+      const r = img.getBoundingClientRect();
+      const x = Math.floor(((clientX - r.left) / r.width) * zw);
+      const y = Math.floor(((clientY - r.top) / r.height) * zh);
+      let best = null, bd = Infinity;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= zw || yy >= zh || !zmap[yy * zw + xx]) continue;
+          const d = dx * dx + dy * dy;
+          if (d < bd) { bd = d; best = { z: zmap[yy * zw + xx] - 1, p: yy * zw + xx, x: xx, y: yy }; }
+        }
+      }
+      return best;
+    }
+
+    // Zone fermée : pixels contigus de la même couleur (remplissage par diffusion)
+    function floodRegion(start) {
+      const v = zmap[start];
+      const mask = new Uint8Array(zmap.length);
+      const stack = new Int32Array(zmap.length);
+      let n = 0;
+      stack[n++] = start;
+      mask[start] = 1;
+      while (n) {
+        const p = stack[--n], x = p % zw;
+        for (const q of [p - zw, p + zw, x > 0 ? p - 1 : -1, x < zw - 1 ? p + 1 : -1]) {
+          if (q >= 0 && q < zmap.length && !mask[q] && zmap[q] === v) { mask[q] = 1; stack[n++] = q; }
+        }
+      }
+      return mask;
+    }
+    const blockMask = (i) => zmap.map((v) => (v === i + 1 ? 1 : 0));
+
+    const hover = (e) => { e.target.style.cursor = zoneAt(e.clientX, e.clientY) ? "pointer" : "default"; };
+    overlay.addEventListener("mousemove", hover);
+    overlay.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const hit = zoneAt(e.clientX, e.clientY);
+      if (!hit) return closeMenu();
+      let j = pending.findIndex((r) => r.mask[hit.p]);
+      if (j < 0 && zones[hit.z].region !== null) {  // déjà isolée lors d'une retouche précédente : c'est son propre bloc
+        return select({ type: "block", i: hit.z }, e.pageX + 10, e.pageY + 10, floodRegion(hit.p));
+      }
+      if (j < 0) {
+        const e0 = edits[hit.z];
+        pending.push({ block: hit.z, fx: (hit.x + 0.5) / zw, fy: (hit.y + 0.5) / zh, color: e0.color, fill: e0.fill, mask: floodRegion(hit.p) });
+        j = pending.length - 1;
+      }
+      select({ type: "region", j }, e.pageX + 10, e.pageY + 10);
+    });
+
+    // -- menu contextuel --------------------------------------------------------------------
+    function select(t, x, y, mask) {
+      target = t;
+      selMask = mask || (t.type === "block" ? blockMask(t.i) : pending[t.j].mask);
+      renderList();
+      draw();
+      openMenu(x, y);
+    }
+    function showView(name) {
+      $$(".zm-view", menu).forEach((v) => { v.hidden = v.dataset.view !== name; });
+      if (name === "color") renderPalette();
+      if (name === "fill") renderFills();
+      const first = $(`.zm-view[data-view="${name}"] button`, menu);
+      if (first) first.focus();
+    }
+    function openMenu(x, y) {
+      const c = cur();
+      $("#zm-swatch").style.setProperty("--c", c.color);
+      $("#zm-title").textContent = target.type === "region" ? "Zone fermée"
+        : zones[target.i].region !== null ? "Zone isolée" : "Toute la couleur";
+      $("#zm-fill").textContent = fills[c.fill];
+      $("#zm-picker").value = c.color;
+      menu.hidden = false;
+      showView("main");
+      const w = menu.offsetWidth, h = menu.offsetHeight;
+      const maxX = window.scrollX + document.documentElement.clientWidth - w - 8;
+      const maxY = window.scrollY + window.innerHeight - h - 8;
+      menu.style.left = `${Math.max(window.scrollX + 8, Math.min(x, maxX))}px`;
+      menu.style.top = `${Math.max(window.scrollY + 8, Math.min(y, maxY))}px`;
+    }
+    function closeMenu() {
+      menu.hidden = true;
+      // une zone cliquée puis laissée telle quelle n'est pas conservée
+      for (let j = pending.length - 1; j >= 0; j--) if (!regionChanged(pending[j])) pending.splice(j, 1);
+      if (target) { target = null; selMask = null; renderList(); draw(); }
+    }
+    $$("[data-goto]", menu).forEach((b) => b.addEventListener("click", () => showView(b.dataset.goto)));
+    menu.addEventListener("click", (e) => e.stopPropagation());
+    document.addEventListener("click", () => { if (!menu.hidden) closeMenu(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !menu.hidden) closeMenu(); });
+
+    function setColor(c) {
+      cur().color = c.toLowerCase();
+      $("#zm-swatch").style.setProperty("--c", cur().color);
+      $("#zm-picker").value = cur().color;
+      renderList();
+      draw();
+    }
+    function renderPalette() {
+      const colors = [...new Set([...zones.map((z) => z.color), ...edits.map((e) => e.color), ...pending.map((r) => r.color)])];
+      $("#zm-palette").replaceChildren(...colors.map((c) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.style.setProperty("--c", c);
+        b.title = c;
+        b.setAttribute("aria-label", `Couleur ${c}`);
+        b.classList.toggle("current", c === cur().color);
+        b.addEventListener("click", () => { setColor(c); renderPalette(); });
+        return b;
+      }));
+    }
+    $("#zm-picker").addEventListener("input", (e) => setColor(e.target.value));
+    $("#zm-picker").addEventListener("change", () => renderPalette());
+
+    function renderFills() {
+      $("#zm-fills").replaceChildren(...fillList.map(([k, label]) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "zm-fill";
+        b.setAttribute("role", "radio");
+        b.setAttribute("aria-checked", String(k === cur().fill));
+        b.innerHTML = `${icon(k)}<span>${label}</span>${k === "tatami" ? "<em>par défaut</em>" : ""}`;
+        b.addEventListener("click", () => {
+          cur().fill = k;
+          $("#zm-fill").textContent = label;
+          renderFills();
+          renderList();
+        });
+        return b;
+      }));
+    }
+
+    // -- appliquer / annuler ----------------------------------------------------------------
+    const showError = (msg) => { errEl.textContent = msg; errEl.hidden = !msg; };
+    resetBtn.addEventListener("click", () => {
+      zones.forEach((z, i) => { edits[i].color = z.color; edits[i].fill = z.fill; });
+      pending.length = 0;
+      closeMenu();
+      renderList();
+      draw();
+    });
+    applyBtn.addEventListener("click", async () => {
+      showError("");
+      applyBtn.disabled = resetBtn.disabled = true;
+      applyBtn.classList.add("loading");
+      const regions = pending.filter(regionChanged).map(({ block, fx, fy, color, fill }) => ({ block, fx, fy, color, fill }));
+      try {
+        const res = await fetch(root.dataset.api, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ zones: edits, regions }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.error || "Une erreur est survenue.");
+        window.location.href = json.urls.page;
+      } catch (ex) {
+        showError(ex.message);
+        applyBtn.classList.remove("loading");
+        renderList();
+      }
+    });
+
+    renderList();
   }
 })();

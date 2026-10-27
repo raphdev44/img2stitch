@@ -1,10 +1,11 @@
 from datetime import datetime
 
-from flask import Blueprint, abort, current_app, jsonify, render_template, request, send_file, url_for
+from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, send_file, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from .designs import (BACKGROUND_MODES, DEFAULT_SIZE_MM, FABRICS, FORMATS, MAX_COLORS, MAX_SIZE_MM, MIN_COLORS,
-                      MIN_SIZE_MM, InvalidImage, analyse_image, parse_exclusions)
+from .designs import (BACKGROUND_MODES, DEFAULT_SIZE_MM, FABRICS, FILL_TYPES, FORMATS, MAX_COLORS, MAX_SIZE_MM,
+                      MIN_COLORS, MIN_SIZE_MM, ZONES, InvalidImage, analyse_image, clean_name, export_filename,
+                      parse_edits, parse_exclusions)
 
 bp = Blueprint("web", __name__)
 
@@ -25,7 +26,7 @@ def _file_url(meta, name):
 def _public(meta):
     out = {k: meta.get(k) for k in ("id", "name", "created_at", "n_colors", "background", "target_mm",
                                      "status", "step", "error", "stats", "threads", "size_mm", "fabric",
-                                     "photo_error")}
+                                     "photo_error", "edit_error")}
     out["photo_rendering"] = bool(meta.get("photo_rendering"))
     out["urls"] = {
         "page": url_for("web.design", design_id=meta["id"]),
@@ -61,8 +62,18 @@ def design(design_id):
                            fabrics={k: (FABRIC_LABELS.get(k, k.capitalize()), v) for k, v in FABRICS.items()})
 
 
+@bp.get("/motifs/<design_id>/edition")
+def edit(design_id):
+    meta = store().get(design_id) or abort(404)
+    if meta["status"] != "ready":
+        return redirect(url_for("web.design", design_id=design_id))
+    return render_template("edit.html", d=meta, zones=store().zones(design_id), fills=FILL_TYPES)
+
+
 @bp.get("/motifs/<design_id>/fichiers/<name>")
 def design_file(design_id, name):
+    if name == ZONES and store().get(design_id):
+        store().zone_map_path(design_id)
     path = store().file_path(design_id, name) or abort(404)
     return send_file(path, max_age=3600)
 
@@ -71,7 +82,7 @@ def design_file(design_id, name):
 def download(design_id, fmt):
     path = store().pattern_path(design_id, fmt) or abort(404)
     meta = store().get(design_id)
-    return send_file(path, as_attachment=True, download_name=f"{meta['name']}.{fmt}",
+    return send_file(path, as_attachment=True, download_name=export_filename(meta["name"], fmt),
                      mimetype="application/octet-stream")
 
 
@@ -115,6 +126,36 @@ def api_analyse():
         return jsonify(analyse_image(f.stream, background, parse_exclusions(request.form.get("exclude"))))
     except InvalidImage as e:
         return jsonify(error=str(e)), 400
+
+
+@bp.post("/api/motifs/<design_id>/edition")
+def api_edit(design_id):
+    if store().get(design_id) is None:
+        abort(404)
+    try:
+        edits, regions = parse_edits(request.get_json(silent=True), len(store().zones(design_id)))
+    except InvalidImage as e:
+        return jsonify(error=str(e)), 400
+    try:
+        store().apply_edits(design_id, edits, regions)
+    except InvalidImage as e:
+        return jsonify(error=str(e)), 409
+    return jsonify(_public(store().get(design_id))), 202
+
+
+@bp.post("/api/motifs/<design_id>/nom")
+def api_rename(design_id):
+    if store().get(design_id) is None:
+        abort(404)
+    try:
+        name = clean_name((request.get_json(silent=True) or {}).get("name"))
+    except InvalidImage as e:
+        return jsonify(error=str(e)), 400
+    try:
+        store().rename(design_id, name)
+    except InvalidImage as e:
+        return jsonify(error=str(e)), 409
+    return jsonify(name=name, filename=export_filename(name, "pes"))
 
 
 @bp.post("/api/motifs/<design_id>/tissu")
