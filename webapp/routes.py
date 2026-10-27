@@ -3,25 +3,34 @@ from datetime import datetime
 from flask import Blueprint, abort, current_app, jsonify, render_template, request, send_file, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from .designs import (BACKGROUND_MODES, DEFAULT_SIZE_MM, FORMATS, MAX_COLORS, MAX_SIZE_MM, MIN_COLORS, MIN_SIZE_MM,
-                      InvalidImage, analyse_image, parse_exclusions)
+from .designs import (BACKGROUND_MODES, DEFAULT_SIZE_MM, FABRICS, FORMATS, MAX_COLORS, MAX_SIZE_MM, MIN_COLORS,
+                      MIN_SIZE_MM, InvalidImage, analyse_image, parse_exclusions)
 
 bp = Blueprint("web", __name__)
 
 BG_LABELS = {"outside": "fond extérieur supprimé", "all": "fond et zones identiques supprimés", "keep": "fond conservé"}
+FABRIC_LABELS = {"blanc": "Blanc", "creme": "Crème", "gris": "Gris", "noir": "Noir", "marine": "Marine",
+                 "denim": "Denim", "rouge": "Rouge"}
 
 
 def store():
     return current_app.extensions["designs"]
 
 
+def _file_url(meta, name):
+    # ?v= : l'aperçu réaliste change quand on change de tissu, le cache navigateur ne doit pas resservir l'ancien
+    return url_for("web.design_file", design_id=meta["id"], name=name, v=meta.get("photo_version", 0))
+
+
 def _public(meta):
     out = {k: meta.get(k) for k in ("id", "name", "created_at", "n_colors", "background", "target_mm",
-                                     "status", "step", "error", "stats", "threads", "size_mm")}
+                                     "status", "step", "error", "stats", "threads", "size_mm", "fabric",
+                                     "photo_error")}
+    out["photo_rendering"] = bool(meta.get("photo_rendering"))
     out["urls"] = {
         "page": url_for("web.design", design_id=meta["id"]),
-        "raw": url_for("web.design_file", design_id=meta["id"], name="preview_raw.png") if meta["has_raw"] else None,
-        "photo": url_for("web.design_file", design_id=meta["id"], name="preview_photo.png") if meta["has_photo"] else None,
+        "raw": _file_url(meta, "preview_raw.png") if meta["has_raw"] else None,
+        "photo": _file_url(meta, "preview_photo.png") if meta["has_photo"] else None,
     }
     return out
 
@@ -48,7 +57,8 @@ def gallery():
 @bp.get("/motifs/<design_id>")
 def design(design_id):
     meta = store().get(design_id) or abort(404)
-    return render_template("design.html", d=meta, formats=FORMATS, bg_labels=BG_LABELS)
+    return render_template("design.html", d=meta, formats=FORMATS, bg_labels=BG_LABELS,
+                           fabrics={k: (FABRIC_LABELS.get(k, k.capitalize()), v) for k, v in FABRICS.items()})
 
 
 @bp.get("/motifs/<design_id>/fichiers/<name>")
@@ -105,6 +115,20 @@ def api_analyse():
         return jsonify(analyse_image(f.stream, background, parse_exclusions(request.form.get("exclude"))))
     except InvalidImage as e:
         return jsonify(error=str(e)), 400
+
+
+@bp.post("/api/motifs/<design_id>/tissu")
+def api_fabric(design_id):
+    if store().get(design_id) is None:
+        abort(404)
+    fabric = (request.get_json(silent=True) or {}).get("fabric")
+    if fabric not in FABRICS:
+        return jsonify(error="Tissu inconnu."), 400
+    try:
+        store().set_fabric(design_id, fabric)
+    except InvalidImage as e:
+        return jsonify(error=str(e)), 409
+    return jsonify(_public(store().get(design_id))), 202
 
 
 @bp.get("/api/motifs/<design_id>")

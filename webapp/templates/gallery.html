@@ -24,7 +24,7 @@
   {% else %}{% set img = 'source.png' %}{% endif %}
   <a class="tile" href="{{ url_for('web.design', design_id=d.id) }}">
     <div class="tile-img {{ 'pending' if img == 'source.png' or img == 'preview_raw.png' }}">
-      <img loading="lazy" src="{{ url_for('web.design_file', design_id=d.id, name=img) }}" alt="{{ d.name }}">
+      <img loading="lazy" src="{{ url_for('web.design_file', design_id=d.id, name=img, v=d.photo_version) }}" alt="{{ d.name }}">
       {% if d.status == 'processing' %}<span class="badge busy">En cours</span>
       {% elif d.status == 'error' %}<span class="badge err">Erreur</span>{% endif %}
     </div>

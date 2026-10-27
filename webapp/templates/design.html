@@ -22,17 +22,36 @@
 {% else %}
 <div class="design-layout" id="design" data-id="{{ d.id }}" data-status="{{ d.status }}"
      data-has-raw="{{ d.has_raw | int }}" data-has-photo="{{ d.has_photo | int }}"
+     data-photo-rendering="{{ d.photo_rendering | default(false) | int }}"
      data-api="{{ url_for('web.api_get', design_id=d.id) }}">
   <section class="card stage-card">
-    <div class="segmented" role="tablist" aria-label="Type d'aperçu">
-      <button role="tab" data-view="photo" {{ 'disabled' if not d.has_photo }}>Réaliste</button>
-      <button role="tab" data-view="raw" {{ 'disabled' if not d.has_raw }}>Simple</button>
-      <button role="tab" data-view="source">Original</button>
+    <div class="stage-toolbar">
+      <div class="segmented" role="tablist" aria-label="Type d'aperçu">
+        <button role="tab" data-view="photo" {{ 'disabled' if not d.has_photo }}>Réaliste</button>
+        <button role="tab" data-view="raw" {{ 'disabled' if not d.has_raw }}>Simple</button>
+        <button role="tab" data-view="source">Original</button>
+      </div>
+      {% if d.status == 'ready' %}
+      <div class="fabrics" id="fabrics" role="radiogroup" aria-label="Tissu de l'aperçu réaliste"
+           data-url="{{ url_for('web.api_fabric', design_id=d.id) }}">
+        <span>Tissu</span>
+        {% for key, (label, hex) in fabrics.items() %}
+        <button type="button" role="radio" class="fabric" data-fabric="{{ key }}" style="--c: {{ hex }}"
+                title="{{ label }}" aria-label="{{ label }}" aria-checked="{{ 'true' if key == d.fabric else 'false' }}"></button>
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
     <div class="stage">
-      {% if d.has_photo %}<img data-view="photo" src="{{ url_for('web.design_file', design_id=d.id, name='preview_photo.png') }}" alt="Rendu réaliste de la broderie">{% endif %}
-      {% if d.has_raw %}<img data-view="raw" src="{{ url_for('web.design_file', design_id=d.id, name='preview_raw.png') }}" alt="Tracé des points">{% endif %}
+      {% set v = d.photo_version %}
+      {% if d.has_photo %}<img data-view="photo" src="{{ url_for('web.design_file', design_id=d.id, name='preview_photo.png', v=v) }}" alt="Rendu réaliste de la broderie">{% endif %}
+      {% if d.has_raw %}<img data-view="raw" src="{{ url_for('web.design_file', design_id=d.id, name='preview_raw.png', v=v) }}" alt="Tracé des points">{% endif %}
       <img data-view="source" src="{{ url_for('web.design_file', design_id=d.id, name='source.png') }}" alt="Image d'origine">
+      <div class="stage-progress" id="photo-progress" hidden>
+        <span class="spinner big"></span>
+        <strong>Nouveau rendu réaliste…</strong>
+        <small>Le fil est posé sur le nouveau tissu, cela prend quelques secondes.</small>
+      </div>
       {% if d.status == 'processing' %}
       <div class="stage-progress">
         <span class="spinner big"></span>

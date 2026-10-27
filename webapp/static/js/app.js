@@ -234,6 +234,58 @@
       };
       setTimeout(poll, 1500);
     }
+
+    // Choix du tissu : regénère l'aperçu réaliste côté serveur puis remplace l'image
+    const fabrics = $("#fabrics");
+    if (fabrics) {
+      const buttons = $$(".fabric", fabrics);
+      const progress = $("#photo-progress");
+      const photo = $('.stage img[data-view="photo"]', root);
+      let current = buttons.find((b) => b.getAttribute("aria-checked") === "true")?.dataset.fabric;
+
+      const select = (name) => buttons.forEach((b) => b.setAttribute("aria-checked", String(b.dataset.fabric === name)));
+      const setBusy = (on) => {
+        progress.hidden = !on;
+        fabrics.classList.toggle("is-busy", on);
+      };
+      const waitPhoto = async () => {
+        try {
+          const d = await (await fetch(root.dataset.api, { cache: "no-store" })).json();
+          if (d.photo_rendering) return setTimeout(waitPhoto, 1000);
+          select(d.fabric);
+          current = d.fabric;
+          if (d.photo_error || !d.urls.photo) return setBusy(false);
+          photo.addEventListener("load", () => setBusy(false), { once: true });
+          photo.src = d.urls.photo;
+        } catch {
+          setTimeout(waitPhoto, 2000);
+        }
+      };
+
+      buttons.forEach((b) => b.addEventListener("click", async () => {
+        if (b.dataset.fabric === current && progress.hidden) return;
+        select(b.dataset.fabric);
+        show("photo");
+        setBusy(true);
+        try {
+          const res = await fetch(fabrics.dataset.url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fabric: b.dataset.fabric }),
+          });
+          if (!res.ok) throw new Error();
+          current = b.dataset.fabric;
+          waitPhoto();
+        } catch {
+          select(current);
+          setBusy(false);
+        }
+      }));
+      if (root.dataset.photoRendering === "1") {
+        setBusy(true);
+        waitPhoto();
+      }
+    }
   }
 
   // --- Galerie : rafraîchit tant que des motifs sont en cours ---

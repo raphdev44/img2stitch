@@ -17,9 +17,11 @@ from werkzeug.utils import secure_filename
 from img2stitch import (Settings, color_palettes, estimate_colors, image_to_pattern, natural_size_mm,
                         render_photo_preview, render_raw_preview)
 from img2stitch.convert import SIZE_MARGIN_MM, pattern_stats
-from img2stitch.photo import stitch_bbox_mm
+from img2stitch.photo import FABRICS, stitch_bbox_mm
 
 log = logging.getLogger(__name__)
+
+DEFAULT_FABRIC = "creme"
 
 FORMATS = {
     "pes": "Brother · Babylock",
@@ -32,6 +34,7 @@ FORMATS = {
     "pec": "Brother (PEC)",
 }
 SOURCE, RAW, PHOTO, THUMB, META = "source.png", "preview_raw.png", "preview_photo.png", "thumb.jpg", "meta.json"
+PATTERN_DATA = "pattern.json"  # points et couleurs exacts, pour refaire un aperçu sans régénérer le motif
 PUBLIC_FILES = {SOURCE, RAW, PHOTO, THUMB}
 MIN_COLORS, MAX_COLORS = 1, 12
 MIN_SIZE_MM, MAX_SIZE_MM, DEFAULT_SIZE_MM = 10, 400, 100
@@ -56,6 +59,7 @@ class DesignStore:
         self.root.mkdir(parents=True, exist_ok=True)
         self._pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="img2stitch")
         self._lock = threading.Lock()
+        self._modify_lock = threading.Lock()  # lecture-modification-écriture de meta.json hors génération initiale
         self._recover_interrupted()
 
     # --- Accès ---
@@ -71,6 +75,8 @@ class DesignStore:
             return None
         meta = self._read(d)
         meta.setdefault("background", "all" if meta.pop("remove_background", True) else "keep")
+        meta.setdefault("fabric", DEFAULT_FABRIC)
+        meta.setdefault("photo_version", 0)
         meta["has_raw"] = (d / RAW).is_file()
         meta["has_photo"] = (d / PHOTO).is_file()
         meta["has_thumb"] = (d / THUMB).is_file()
@@ -108,6 +114,7 @@ class DesignStore:
             "background": background,
             "target_mm": list(target_mm),
             "excluded": list(excluded),
+            "fabric": DEFAULT_FABRIC,
             "status": "processing",
             "step": "Analyse de l'image",
             "error": None,
@@ -133,6 +140,7 @@ class DesignStore:
             opts = {"tie_on": True, "tie_off": True} if s.lock_stitches else {}
             for fmt in FORMATS:
                 pe.write(pattern, str(d / f"pattern.{fmt}"), opts)
+            _write_atomic(d / PATTERN_DATA, lambda p: _save_pattern(pattern, p))
 
             x0, y0, x1, y1 = stitch_bbox_mm(pattern)
             _write_atomic(d / RAW, lambda p: render_raw_preview(pattern, p))
@@ -144,17 +152,48 @@ class DesignStore:
                 size_mm=[round(float(x1 - x0), 1), round(float(y1 - y0), 1)],
             )
 
-            _write_atomic(d / PHOTO, lambda p: render_photo_preview(pattern, p))
-            with Image.open(d / PHOTO) as ph:
-                ph = ph.convert("RGB")
-                ph.thumbnail((640, 640), Image.LANCZOS)
-                _write_atomic(d / THUMB, lambda p: ph.save(p, "JPEG", quality=86, optimize=True))
+            _write_atomic(d / PHOTO, lambda p: render_photo_preview(pattern, p, fabric=DEFAULT_FABRIC))
+            _make_thumb(d)
             self._update(d, meta, status="ready", step=None)
         except InvalidImage as e:
             self._update(d, meta, status="error", step=None, error=str(e))
         except Exception:
             log.exception("Échec de génération pour %s", d.name)
             self._update(d, meta, status="error", step=None, error="La génération du motif a échoué.")
+
+    # --- Tissu de l'aperçu réaliste ---
+    def set_fabric(self, design_id, fabric):
+        d = self.dir(design_id)
+        with self._modify_lock:
+            meta = self._read(d)
+            if meta.get("status") != "ready":
+                raise InvalidImage("Le motif n'est pas encore prêt.")
+            req = meta.get("photo_request", 0) + 1
+            meta.update(fabric=fabric, photo_request=req, photo_rendering=True, photo_error=None)
+            self._write(d, meta)
+        self._pool.submit(self._render_photo, d, fabric, req)
+
+    def _render_photo(self, d, fabric, req):
+        tmp = d / f"preview_photo.{req}.tmp.png"
+        try:
+            render_photo_preview(_load_pattern(d), str(tmp), fabric=fabric)
+            with self._modify_lock:
+                meta = self._read(d)
+                if meta.get("photo_request") != req:  # un autre tissu a été choisi entre-temps
+                    return
+                os.replace(tmp, d / PHOTO)
+                _make_thumb(d)
+                meta.update(photo_rendering=False, photo_version=meta.get("photo_version", 0) + 1)
+                self._write(d, meta)
+        except Exception:
+            log.exception("Échec du rendu réaliste pour %s", d.name)
+            with self._modify_lock:
+                meta = self._read(d)
+                if meta.get("photo_request") == req:
+                    meta.update(photo_rendering=False, photo_error="Le nouveau rendu a échoué.")
+                    self._write(d, meta)
+        finally:
+            tmp.unlink(missing_ok=True)
 
     # --- Persistance ---
     def _recover_interrupted(self):
@@ -163,6 +202,8 @@ class DesignStore:
                 meta = self._read(d)
                 if meta.get("status") == "processing":
                     self._update(d, meta, status="error", step=None, error="Génération interrompue (redémarrage du serveur).")
+                elif meta.get("photo_rendering"):
+                    self._update(d, meta, photo_rendering=False)
 
     def _update(self, d, meta, **changes):
         meta.update(changes)
@@ -220,6 +261,35 @@ def analyse_image(stream, background, excluded=()):
                 for n, pal in color_palettes(img, background=bg, bg_scope=scope, max_colors=MAX_COLORS,
                                              exclude=ex).items()}
     return {"colors": colors, "width_mm": fit(w), "height_mm": fit(h), "palettes": palettes}
+
+
+def _save_pattern(pattern, path):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"stitches": [[float(x), float(y), int(c)] for x, y, c in pattern.stitches],
+                   "threads": [t.color & 0xFFFFFF for t in pattern.threadlist]}, f)
+
+
+def _load_pattern(d):
+    if not (d / PATTERN_DATA).is_file():
+        # Motifs créés avant pattern.json : le VP3 change les sauts en points (fils de déplacement visibles),
+        # on prend donc le parcours du DST (sauts et coupes conservés) et les couleurs exactes du VP3.
+        pattern = pe.read(str(d / "pattern.dst"))
+        pattern.threadlist = pe.read(str(d / "pattern.vp3")).threadlist
+        return pattern
+    with open(d / PATTERN_DATA, encoding="utf-8") as f:
+        data = json.load(f)
+    pattern = pe.EmbPattern()
+    pattern.stitches = [list(s) for s in data["stitches"]]
+    for c in data["threads"]:
+        pattern.add_thread({"color": c})
+    return pattern
+
+
+def _make_thumb(d):
+    with Image.open(d / PHOTO) as ph:
+        ph = ph.convert("RGB")
+        ph.thumbnail((640, 640), Image.LANCZOS)
+        _write_atomic(d / THUMB, lambda p: ph.save(p, "JPEG", quality=86, optimize=True))
 
 
 def _write_atomic(path, write):
