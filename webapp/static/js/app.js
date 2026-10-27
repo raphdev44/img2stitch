@@ -544,6 +544,7 @@
       relief_bricks: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v6M15 3v6M6 9v6M12 9v6M18 9v6M9 15v6M15 15v6" stroke-dasharray="1 1.6"/>',
       relief_diamonds: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m3 9 6-6 12 12M3 15 15 3l6 6M9 21l12-12M3 9l12 12" stroke-dasharray="1 1.6"/>',
       relief_circles: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="3" stroke-dasharray="1 1.6"/><circle cx="16" cy="8" r="3" stroke-dasharray="1 1.6"/><circle cx="12" cy="15" r="3" stroke-dasharray="1 1.6"/>',
+      relief_scales: '<rect x="2" y="2" width="20" height="20" rx="2"/><path d="M2 5q4 8 8 0t8 0M-2 10q4 8 8 0t8 0t8 0M2 15q4 8 8 0t8 0" stroke-dasharray="1 1.4"/>',
     };
     const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${FILL_ICONS[k] || ""}</svg>`;
     const changed = (i) => edits[i].color !== zones[i].color || edits[i].fill !== zones[i].fill;

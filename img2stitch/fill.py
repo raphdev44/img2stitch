@@ -137,6 +137,7 @@ FILL_TYPES = {
     "relief_bricks": "Relief : briques",
     "relief_diamonds": "Relief : losanges",
     "relief_circles": "Relief : écailles",
+    "relief_scales": "Relief : écailles en quinconce",
 }
 
 
@@ -210,6 +211,47 @@ def fill_runs_relief(mask, px_per_mm, row_spacing_mm, angle_deg, min_area_mm2, k
     return out
 
 
+def fill_scale_paths(mask, px_per_mm, min_area_mm2, radius_mm=2.5, sample_mm=0.25):
+    """Demi-cercles en U, brodés en rangées décalées et découpés aux limites du masque."""
+    prep = _rotated(mask, px_per_mm, 0.0, min_area_mm2)
+    if prep is None:
+        return []
+    rot, labels, good, back, side = prep
+    diameter = radius_mm * 2
+    row_step = radius_mm
+    samples = max(4, math.ceil(math.pi * radius_mm / sample_mm))
+    angles = np.linspace(math.pi, 2 * math.pi, samples + 1)
+    paths = []
+
+    for row, y in enumerate(np.arange(0, side / px_per_mm + row_step, row_step)):
+        offset = (row % 2) * radius_mm
+        for col in range(-1, math.ceil(side / px_per_mm / diameter) + 1):
+            cx = (col + 0.5) * diameter + offset
+            points = np.column_stack((cx + radius_mm * np.cos(angles),
+                                      y + radius_mm * np.sin(angles))) * px_per_mm
+            ix = np.rint(points[:, 0]).astype(int)
+            iy = np.rint(points[:, 1]).astype(int)
+            valid = (ix >= 0) & (ix < side) & (iy >= 0) & (iy < side)
+            components = np.full(len(points), -1, dtype=int)
+            components[valid] = labels[iy[valid], ix[valid]]
+
+            start = 0
+            while start < len(points):
+                component = components[start]
+                end = start + 1
+                while end < len(points) and components[end] == component:
+                    end += 1
+                if component in good:
+                    segment = points[start:end]
+                    length = np.hypot(np.diff(segment[:, 0]), np.diff(segment[:, 1])).sum() / px_per_mm
+                    if length >= 0.7:
+                        path = [back(x, py) for x, py in segment]
+                        paths.append({"p0": path[0], "p1": path[-1], "comp": int(component),
+                                      "row": row, "path": path})
+                start = end
+    return paths
+
+
 def zone_fill(kind, mask, px_per_mm, s):
     """Passes de remplissage d'une zone selon le motif `kind` : liste de ("runs", rangées) ou ("loops", boucles)."""
     sp, ang, area = s.row_spacing_mm, s.fill_angle_deg, s.min_area_mm2
@@ -236,5 +278,8 @@ def zone_fill(kind, mask, px_per_mm, s):
     if kind == "none":
         return []
     if kind.startswith("relief_"):  # rangées horizontales : le motif apparaît droit, comme sur un nuancier
+        if kind == "relief_scales":
+            return [("runs", fill_runs(mask, px_per_mm, sp, ang, area)),
+                    ("runs", fill_scale_paths(mask, px_per_mm, area))]
         return [("runs", fill_runs_relief(mask, px_per_mm, sp, 0.0, area, kind))]
     return [("runs", fill_runs(mask, px_per_mm, sp, ang, area))]
