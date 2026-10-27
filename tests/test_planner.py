@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import pyembroidery as pe
+import pytest
 from PIL import Image, ImageDraw
 
 from img2stitch import Settings
@@ -25,6 +26,37 @@ def test_thicken_lines_preserves_and_expands_hairline(tmp_path):
     assert len(default_masks) == 1
     dark_index = min(range(len(palette)), key=lambda i: sum(palette[i]))
     assert thickened_masks[dark_index].sum() >= 900
+
+
+def test_excluded_colors_are_reassigned_without_removing_pixels():
+    from img2stitch.preprocess import _embroidered_pixels, load_and_quantize
+
+    image = Image.new("RGB", (60, 40), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((10, 10, 24, 29), fill=(250, 20, 20))
+    draw.rectangle((25, 10, 39, 29), fill=(200, 20, 20))
+    draw.rectangle((40, 10, 49, 29), fill=(20, 20, 200))
+    excluded = [((250, 20, 20), ((200, 20, 20), (20, 20, 200)))]
+    _, original = _embroidered_pixels(image, 60, "auto", bg_scope="outside")
+    rgb, included = _embroidered_pixels(image, 60, "auto", bg_scope="outside", exclude=excluded)
+    np.testing.assert_array_equal(included, original)
+    np.testing.assert_array_equal(rgb[15, 15], (200, 20, 20))
+    palette, masks = load_and_quantize(image, 60, 2, "auto", bg_scope="outside",
+                                      exclude=excluded, thicken_lines=True)
+    np.testing.assert_array_equal(np.any(masks, axis=0), original)
+    assert set(palette) == {(200, 20, 20), (20, 20, 200)}
+
+
+def test_excluded_colors_preserve_transparency():
+    from img2stitch.preprocess import _embroidered_pixels
+
+    image = Image.new("RGBA", (3, 1))
+    image.putpixel((1, 0), (250, 20, 20, 255))
+    image.putpixel((2, 0), (20, 20, 200, 255))
+    excluded = [((250, 20, 20), ((20, 20, 200),))]
+    rgb, included = _embroidered_pixels(image, 3, background="none", exclude=excluded)
+    np.testing.assert_array_equal(included, [[False, True, True]])
+    np.testing.assert_array_equal(rgb[0, 1:], [[20, 20, 200], [20, 20, 200]])
 
 
 def test_ring_with_covered_hole_needs_at_most_one_jump(tmp_path):
@@ -64,7 +96,8 @@ def test_far_jump_is_trimmed(tmp_path):
             assert cmds[i - 1] == pe.TRIM, "saut long sans coupe"
 
 
-def test_every_filled_pixel_is_covered_by_thread(tmp_path):
+@pytest.mark.parametrize("excluded", [(), (((220, 30, 30), ((30, 160, 70),)),)])
+def test_every_filled_pixel_is_covered_by_thread(tmp_path, excluded):
     """L'optimisation du parcours ne doit oublier aucune zone à broder (et laisser le trou vide vide)."""
     from img2stitch.preprocess import load_and_quantize
 
@@ -73,7 +106,7 @@ def test_every_filled_pixel_is_covered_by_thread(tmp_path):
         d.ellipse((110, 110, 250, 250), fill=(255, 255, 255))     # trou vide
         d.polygon([(330, 60), (390, 60), (360, 190)], fill=(30, 160, 70))
     path = _img(tmp_path, draw)
-    s = Settings(width_mm=60, n_colors=2)
+    s = Settings(width_mm=60, n_colors=2, exclude_colors=excluded)
     s.center_on_origin = False   # on compare aux masques : même repère que l'image
     pat = image_to_pattern(path, s)
 

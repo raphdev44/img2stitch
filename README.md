@@ -40,16 +40,28 @@ Exemple complet dans `examples/`.
 Puis ouvrir http://127.0.0.1:5000 : création de motifs (image, nombre de couleurs, suppression du fond),
 aperçus réaliste / simple, téléchargement dans tous les formats, galerie.
 Les motifs sont stockés dans `instance/designs/` (modifiable via la variable `IMG2STITCH_DATA`).
+Dans les deux parcours, supprimer une couleur réduit les fils utilisés sans retirer de zone
+du motif : ses pixels sont réaffectés à la couleur conservée la plus proche en CIELAB.
+Seuls la transparence et les réglages de suppression du fond créent des zones non brodées.
 
 ### Pixel art en point de croix
 Depuis la galerie, « + Nouveau pixel art en point de croix » ouvre un import dédié.
 Un moteur distinct détecte les cases d'une grille régulière et génère une croix de 2 mm
 par case colorée, sans broder les lignes du quadrillage. Les petites images à leur résolution
 native sont également acceptées : un pixel correspond alors à une case.
+Les pixel arts agrandis sans quadrillage sont aussi acceptés si leurs blocs carrés sont
+bien marqués et alignés régulièrement. Le moteur détecte automatiquement la taille et
+le décalage des blocs, puis prélève leur couleur au centre, sans ajouter de lignes.
+Les marges et la transparence sont conservées ; les arrondis de redimensionnement et
+les petites variations dues au JPEG sont tolérés. Une image sans trame identifiable
+ne permet pas de déduire automatiquement la taille des cases.
 Les dimensions restent fixes, à raison de 2 mm par case.
 La création utilise les mêmes contrôles de couleurs que les motifs classiques :
 curseur de 1 à 12, valeur proposée automatiquement, aperçu des palettes et pastilles
-pour supprimer une couleur ou la rétablir. Une couleur supprimée laisse ses cases vides.
+pour supprimer une couleur ou la rétablir. Les cases d'une couleur supprimée sont
+brodées avec la couleur conservée la plus proche (distance perceptuelle CIELAB),
+sans perdre de croix. Il faut conserver au moins une couleur. Les cases transparentes
+et le fond supprimé restent vides.
 Le nombre choisi est un maximum : le moteur n'ajoute pas de couleurs si l'image en contient moins.
 Les pastilles des fils permettent de changer leurs couleurs ; les fils devenus identiques
 sont regroupés automatiquement. Les modifications régénèrent les aperçus et les exports,
@@ -57,5 +69,5 @@ sans modifier les dimensions des croix.
 Les nuances très proches dues à la compression sont regroupées automatiquement.
 La suppression de l'arrière-plan conserve les mêmes trois modes que la création classique.
 Les aperçus et les huit formats de téléchargement restent disponibles.
-Limites : 200 cases par côté (400 mm), 40 000 cases, 256 couleurs ; une grille non détectée
-sur une grande image est signalée comme une erreur.
+Limites : 200 cases par côté (400 mm), 40 000 cases, 256 couleurs ; l'absence de grille
+ou de blocs réguliers détectables sur une grande image est signalée comme une erreur.

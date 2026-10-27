@@ -6,7 +6,7 @@ import pyembroidery as pe
 import pytest
 from PIL import Image, ImageDraw
 
-from img2stitch.cross_stitch import _grid_lines, cross_stitch_palettes, cross_stitch_pattern, read_cells
+from img2stitch.cross_stitch import _grid_lines, _prepare_cells, cross_stitch_palettes, cross_stitch_pattern, read_cells
 from webapp import create_app
 
 
@@ -40,6 +40,66 @@ def test_printed_grid_is_sampled_without_grid_lines():
     pattern = cross_stitch_pattern(_source(image))
     assert pattern.img2stitch_grid["crosses"] == 1
     assert pattern.threadlist[0].color & 0xFFFFFF == 0xFF0000
+
+
+@pytest.fixture
+def block_art():
+    native = Image.new("RGB", (32, 32), "white")
+    draw = ImageDraw.Draw(native)
+    draw.polygon([(3, 12), (5, 12), (5, 8), (9, 8), (9, 5), (23, 5),
+                  (23, 8), (27, 8), (27, 12), (29, 12), (29, 24),
+                  (25, 24), (25, 27), (7, 27), (7, 24), (3, 24)], fill="black")
+    draw.rectangle((7, 9, 24, 13), fill=(225, 160, 65))
+    draw.rectangle((5, 15, 26, 16), fill=(135, 195, 55))
+    draw.rectangle((7, 18, 24, 20), fill=(100, 55, 55))
+    draw.rectangle((9, 22, 22, 25), fill=(225, 160, 65))
+    draw.point((11, 10), fill=(255, 240, 180))
+    draw.point((19, 11), fill=(255, 240, 180))
+    return native
+
+
+@pytest.mark.parametrize("side, image_format", [(96, "PNG"), (448, "PNG"), (600, "PNG"), (600, "JPEG")])
+def test_enlarged_pixel_art_without_grid(block_art, side, image_format):
+    image = block_art.resize((side, side), Image.Resampling.NEAREST)
+    stream = io.BytesIO()
+    image.save(stream, image_format)
+    stream.seek(0)
+    cells = read_cells(stream)
+    assert cells.shape == (32, 32, 4)
+    assert np.allclose(cells[:, :, :3], np.array(block_art), atol=0 if image_format == "PNG" else 8)
+    stream.seek(0)
+    assert cross_stitch_pattern(stream).img2stitch_grid == cross_stitch_pattern(block_art).img2stitch_grid
+
+
+def test_enlarged_blocks_with_unaligned_margins(block_art):
+    image = Image.new("RGB", (468, 468), "white")
+    image.paste(block_art.resize((448, 448), Image.Resampling.NEAREST), (7, 9))
+    expected = Image.new("RGB", (34, 34), "white")
+    expected.paste(block_art, (1, 1))
+    cells = read_cells(image)
+    assert cells.shape == (34, 34, 4)
+    np.testing.assert_array_equal(cells[:, :, :3], np.array(expected))
+    assert cross_stitch_pattern(image).img2stitch_grid["crosses"] == cross_stitch_pattern(block_art).img2stitch_grid["crosses"]
+
+
+def test_enlarged_transparent_blocks(block_art):
+    pixels = np.array(block_art.convert("RGBA"))
+    pixels[np.all(pixels[:, :, :3] == 255, axis=2)] = (0, 0, 0, 0)
+    image = Image.fromarray(pixels).resize((600, 600), Image.Resampling.NEAREST)
+    np.testing.assert_array_equal(read_cells(image), pixels)
+    assert cross_stitch_pattern(image, "keep").img2stitch_grid["crosses"] == cross_stitch_pattern(block_art).img2stitch_grid["crosses"]
+
+
+def test_non_square_blocks_are_rejected(block_art):
+    image = block_art.resize((320, 640), Image.Resampling.NEAREST)
+    with pytest.raises(ValueError, match="carrées"):
+        read_cells(image)
+
+
+def test_unstructured_large_image_is_not_treated_as_blocks():
+    pixels = np.random.default_rng(42).integers(0, 256, (600, 600, 3), dtype=np.uint8)
+    with pytest.raises(ValueError, match="Quadrillage"):
+        read_cells(Image.fromarray(pixels))
 
 
 @pytest.mark.parametrize("side, image_format", [(768, "PNG"), (768, "JPEG"), (1080, "JPEG")])
@@ -103,6 +163,42 @@ def test_native_png_preserves_similar_colors():
     assert len(pattern.threadlist) == 2
 
 
+@pytest.mark.parametrize("background", ["outside", "all", "keep"])
+def test_excluded_colors_use_nearest_remaining_color(background):
+    image = Image.new("RGBA", (6, 4), "white")
+    colors = [(250, 20, 20), (200, 20, 20), (20, 20, 240), (20, 20, 200)]
+    for column, color in enumerate(colors, 1):
+        image.putpixel((column, 1), (*color, 255))
+    image.putpixel((0, 0), (0, 0, 0, 0))
+    excluded = [(colors[index], tuple(color for color in colors if color != colors[index]))
+                for index in (0, 2)]
+    _, palette, labels = _prepare_cells(image, background, exclude=excluded)
+    assert [palette[labels[1, column]] for column in range(1, 5)] == [
+        colors[1], colors[1], colors[3], colors[3]]
+    assert labels[0, 0] == -1
+    assert (labels[0, 1] == -1) == (background != "keep")
+    assert cross_stitch_pattern(image, background, exclude=excluded).img2stitch_grid == (
+        cross_stitch_pattern(image, background).img2stitch_grid)
+
+
+def test_excluded_color_cannot_be_replaced_by_removed_background():
+    image = Image.new("RGB", (5, 5), "white")
+    image.putpixel((1, 1), (240, 240, 240))
+    image.putpixel((2, 1), (0, 0, 0))
+    excluded = [((240, 240, 240), ((0, 0, 0),))]
+    _, palette, labels = _prepare_cells(image, "outside", exclude=excluded)
+    assert palette[labels[1, 1]] == (0, 0, 0)
+    assert labels[0, 0] == -1
+
+
+def test_excluding_all_colors_is_rejected():
+    image = Image.new("RGB", (2, 1), "red")
+    excluded = [((255, 0, 0), ())]
+    for function in (cross_stitch_palettes, cross_stitch_pattern):
+        with pytest.raises(ValueError, match="au moins une couleur"):
+            function(image, "keep", exclude=excluded)
+
+
 def test_color_reduction_preserves_crosses_and_size():
     image = Image.new("RGB", (5, 5), "white")
     image.putpixel((1, 1), (255, 0, 0))
@@ -142,7 +238,7 @@ def test_suggested_palettes_match_generated_threads():
         assert actual == palette
 
 
-def test_excluded_palette_color_leaves_cells_unstitched():
+def test_excluded_palette_color_is_replaced_without_losing_crosses():
     image = Image.new("RGB", (5, 5), "white")
     image.putpixel((1, 1), (255, 0, 0))
     image.putpixel((2, 1), (0, 0, 255))
@@ -151,7 +247,10 @@ def test_excluded_palette_color_leaves_cells_unstitched():
     assert analysis["colors"] == 1
     assert analysis["palettes"][2] == [(0, 0, 255)]
     pattern = cross_stitch_pattern(_source(image), n_colors=2, exclude=excluded)
-    assert pattern.img2stitch_grid["crosses"] == 1
+    original = cross_stitch_pattern(image)
+    assert pattern.img2stitch_grid == original.img2stitch_grid
+    assert sorted(tuple(stitch[:2]) for stitch in pattern.stitches if stitch[2] == pe.STITCH) == sorted(
+        tuple(stitch[:2]) for stitch in original.stitches if stitch[2] == pe.STITCH)
     assert len(pattern.threadlist) == 1
     assert pattern.threadlist[0].color & 0xFFFFFF == 0x0000FF
 
@@ -237,6 +336,30 @@ def test_web_cross_stitch_workflow(tmp_path):
         assert client.post(f"/api/motifs/{design_id}/edition", json={
             "zones": [{"color": "#00ff00", "fill": "tatami"}],
         }).status_code == 409
+    finally:
+        store._pool.shutdown(wait=True)
+
+
+def test_web_enlarged_blocks_workflow(block_art, tmp_path, monkeypatch):
+    app = create_app({"TESTING": True, "DESIGNS_DIR": str(tmp_path)})
+    store = app.extensions["designs"]
+    monkeypatch.setattr(store._pool, "submit", lambda function, *args: function(*args))
+    client = app.test_client()
+    image = block_art.resize((600, 600), Image.Resampling.NEAREST)
+    try:
+        analysis = client.post("/api/pixel-art/analyse", data={
+            "image": (_source(image), "blocks.png"), "background": "outside",
+        })
+        assert analysis.status_code == 200, analysis.json
+        response = client.post("/api/pixel-art", data={
+            "image": (_source(image), "blocks.png"), "background": "outside",
+        })
+        assert response.status_code == 202
+        meta = store.get(response.json["id"])
+        assert meta["status"] == "ready", meta.get("error")
+        assert meta["grid"] == cross_stitch_pattern(block_art).img2stitch_grid
+        assert meta["size_mm"] == [54.0, 46.0]
+        assert client.get(f"/motifs/{meta['id']}/telecharger/pes").status_code == 200
     finally:
         store._pool.shutdown(wait=True)
 
@@ -385,13 +508,13 @@ def test_cross_stitch_analysis_and_exclusions_api(tmp_path, monkeypatch):
             "image": (_source(image), "pixel.png"), "colors": "2", "exclude": excluded,
         })
         assert response.status_code == 202
-        assert response.json["grid"]["crosses"] == 2
+        assert response.json["grid"]["crosses"] == 3
         assert response.json["threads"] == palette
         meta = store.get(response.json["id"])
         assert meta["excluded"] == json.loads(excluded)
         response = client.post(f"/api/motifs/{meta['id']}/fil", json={"from": "#ff0000", "to": "#00ff00"})
         assert response.status_code == 202
-        assert response.json["grid"]["crosses"] == 2
+        assert response.json["grid"]["crosses"] == 3
         assert set(response.json["threads"]) == {"#00ff00", "#ffff00"}
         assert client.post("/api/pixel-art/analyse").status_code == 400
         for endpoint in ("/api/pixel-art/analyse", "/api/pixel-art"):

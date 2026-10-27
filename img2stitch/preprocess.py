@@ -100,8 +100,8 @@ def _touching_border(mask):
 
 def _embroidered_pixels(src, width_px, background="auto", bg_tol=40, bg_scope="all", exclude=()):
     """Image redimensionnée -> (rgb int (H,W,3), masque des pixels à broder). `src` : chemin, fichier ou image PIL.
-    `exclude` : couleurs à ne pas broder, liste de (couleur, autres_couleurs_de_la_palette) ; un pixel est retiré
-    s'il est plus proche de la couleur exclue que de toutes les autres (même règle que l'attribution des fils)."""
+    `exclude` : liste de (couleur, autres_couleurs_de_la_palette) ; les pixels attribués aux couleurs exclues
+    prennent la couleur conservée la plus proche en CIELAB, sans modifier la zone à broder."""
     img = (src if isinstance(src, Image.Image) else Image.open(src)).convert("RGBA")
     h = max(1, round(img.height * width_px / img.width))
     img = img.resize((width_px, h), Image.LANCZOS)
@@ -134,7 +134,15 @@ def _embroidered_pixels(src, width_px, background="auto", bg_tol=40, bg_scope="a
             d_other = (np.linalg.norm(lab[:, None] - _to_lab(np.array(others))[None], axis=2).min(axis=1)
                        if len(others) else np.inf)
             drop |= d_ex < d_other
-        keep[keep] = ~drop
+        if drop.any():
+            if drop.all():
+                raise ValueError("Conservez au moins une couleur pour broder le motif.")
+            pixels = rgb[keep]
+            available = np.unique(pixels[~drop], axis=0)
+            search = cv2.flann_Index(_to_lab(available), dict(algorithm=1, trees=1))
+            nearest, _ = search.knnSearch(np.ascontiguousarray(lab[drop]), 1, params={"checks": -1})
+            pixels[drop] = available[nearest[:, 0]]
+            rgb[keep] = pixels
     return rgb, keep
 
 

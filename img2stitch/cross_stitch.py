@@ -7,7 +7,7 @@ import pyembroidery as pe
 from PIL import Image, ImageOps
 
 from .convert import _center_on_origin
-from .preprocess import _embroidered_pixels
+from .preprocess import _nearest, _to_lab
 
 CELL_MM = 2.0
 MAX_CELLS = 40_000
@@ -52,35 +52,75 @@ def _grid_lines(rgb, axis):
     return lines, float(pitch)
 
 
+def _block_lines(rgba, axis):
+    pixels = rgba.astype(np.float32)
+    pixels[:, :, :3] *= pixels[:, :, 3:] / 255
+    transitions = np.max(np.abs(np.diff(pixels, axis=1 - axis)), axis=2) > 24
+    strength = transitions.sum(axis=axis)
+    indices = np.flatnonzero(strength >= max(3, strength.max(initial=0) * 0.04))
+    groups = np.split(indices, np.flatnonzero(np.diff(indices) > 1) + 1)
+    groups = [group for group in groups if 0 < len(group) <= 5]
+    if not 4 <= len(groups) <= MAX_SIDE_CELLS:
+        return None
+    centers = np.array([np.average(group + 1, weights=strength[group]) for group in groups])
+    weights = np.array([strength[group].sum() for group in groups])
+    gaps = np.diff(centers)
+    candidates = sorted({round(float(gap / divisor), 3) for gap in gaps
+                         for divisor in range(1, 9) if gap / divisor >= 3}, reverse=True)
+    for candidate in candidates:
+        pitch, origin = candidate, centers[np.argmax(weights)]
+        for _ in range(3):
+            positions = np.rint((centers - origin) / pitch)
+            aligned = np.abs(centers - origin - positions * pitch) <= max(0.8, pitch * 0.06)
+            if len(np.unique(positions[aligned])) < 4:
+                break
+            pitch, origin = np.polyfit(positions[aligned], centers[aligned], 1,
+                                      w=np.sqrt(weights[aligned]))
+        else:
+            positions = np.rint((centers - origin) / pitch)
+            aligned = np.abs(centers - origin - positions * pitch) <= max(0.8, pitch * 0.06)
+            if pitch < 3 - 1e-6 or aligned.mean() < 0.9 or weights[aligned].sum() < weights.sum() * 0.95:
+                continue
+            size = rgba.shape[1 - axis]
+            start = origin + np.floor(-origin / pitch + 0.08) * pitch
+            count = int(np.ceil((size - start) / pitch - 0.08))
+            lines = start + np.arange(count + 1) * pitch
+            lines[0], lines[-1] = 0, size
+            return lines, float(pitch)
+    return None
+
+
 def read_cells(source):
-    """Extrait les centres des cases d'une grille, ou les pixels d'une image native."""
+    """Extrait les cases d'une grille, les blocs agrandis ou les pixels natifs."""
     if not isinstance(source, Image.Image):
         with Image.open(source) as image:
             return read_cells(image)
     rgba = np.array(ImageOps.exif_transpose(source).convert("RGBA"))
     rgb = rgba[:, :, :3]
     vertical, horizontal = _grid_lines(rgb, 0), _grid_lines(rgb, 1)
+    if vertical is None or horizontal is None:
+        vertical, horizontal = _block_lines(rgba, 0), _block_lines(rgba, 1)
     if vertical is not None and horizontal is not None:
         xs, dx = vertical
         ys, dy = horizontal
         if abs(dx - dy) > max(2, min(dx, dy) * 0.15):
             raise ValueError("Les cases du quadrillage doivent être carrées.")
-        columns = max(1, round((xs[-1] - xs[0]) / dx))
-        rows = max(1, round((ys[-1] - ys[0]) / dy))
+        columns, rows = len(xs) - 1, len(ys) - 1
         if max(columns, rows) > MAX_SIDE_CELLS:
             raise ValueError("La grille ne doit pas dépasser 200 cases par côté (400 mm).")
         cells = np.empty((rows, columns, 4), dtype=np.uint8)
         for row in range(rows):
             for col in range(columns):
-                cx, cy = xs[0] + (col + 0.5) * dx, ys[0] + (row + 0.5) * dy
-                rx, ry = max(1, int(dx * 0.2)), max(1, int(dy * 0.2))
+                cx, cy = (xs[col] + xs[col + 1]) / 2, (ys[row] + ys[row + 1]) / 2
+                rx = max(0, int((xs[col + 1] - xs[col]) * 0.2))
+                ry = max(0, int((ys[row + 1] - ys[row]) * 0.2))
                 patch = rgba[max(0, round(cy) - ry):round(cy) + ry + 1,
                              max(0, round(cx) - rx):round(cx) + rx + 1]
                 cells[row, col] = np.median(patch, axis=(0, 1)).astype(np.uint8)
     else:
         cells = rgba
         if cells.shape[0] * cells.shape[1] > MAX_CELLS:
-            raise ValueError("Quadrillage non détecté. Envoyez une grille régulière ou un pixel art à sa résolution native.")
+            raise ValueError("Quadrillage ou blocs de pixels non détectés. Envoyez une grille régulière, un pixel art à blocs nets ou à sa résolution native.")
     if cells.shape[0] * cells.shape[1] > MAX_CELLS:
         raise ValueError("Le motif dépasse la limite de 40 000 cases.")
     if max(cells.shape[:2]) > MAX_SIDE_CELLS:
@@ -130,9 +170,23 @@ def _prepare_cells(source, background, source_format=None, exclude=()):
                 outside = np.unique(np.concatenate((components[0], components[-1],
                                                     components[:, 0], components[:, -1])))
                 labels[np.isin(components, outside[outside != 0])] = -1
-    if exclude:
-        _, included = _embroidered_pixels(Image.fromarray(cells), cells.shape[1], background="none", exclude=exclude)
-        labels[~included] = -1
+    if exclude and (labels >= 0).any():
+        active = np.unique(labels[labels >= 0])
+        lab = _to_lab(np.array(palette)[active])
+        removed = np.zeros(len(active), dtype=bool)
+        for color, others in exclude:
+            distance = np.linalg.norm(lab - _to_lab(np.array([color])), axis=1)
+            other_distance = (np.linalg.norm(lab[:, None] - _to_lab(np.array(others))[None], axis=2).min(axis=1)
+                              if len(others) else np.inf)
+            removed |= distance < other_distance
+        available = active[~removed]
+        if not len(available):
+            raise ValueError("Conservez au moins une couleur pour broder le motif.")
+        remap = np.arange(len(palette))
+        if removed.any():
+            remap[active[removed]] = available[_nearest(lab[removed], lab[~removed])]
+        keep = labels >= 0
+        labels[keep] = remap[labels[keep]]
     return cells, palette, labels
 
 
