@@ -125,11 +125,89 @@ FILL_TYPES = {
     "tatami_v": "Linéaire vertical",
     "cross": "Croisé (quadrillage)",
     "satin": "Satin (zones étroites)",
+    "satin_flow": "Satin suivant la forme (lettres, rubans)",
     "contour": "Contours concentriques",
     "wave": "Ondulé",
     "zigzag": "Zigzag",
     "none": "Contour seul (sans remplissage)",
+    # Remplissages en relief : même densité que le linéaire, mais les piqûres sont alignées sur un motif
+    "relief_stripes": "Relief : rayures",
+    "relief_chevron": "Relief : chevrons",
+    "relief_waves": "Relief : vagues",
+    "relief_bricks": "Relief : briques",
+    "relief_diamonds": "Relief : losanges",
+    "relief_circles": "Relief : écailles",
 }
+
+
+def _relief_cuts(kind, y, x0, x1):
+    """Positions (mm, repère tourné) où le motif impose une piqûre sur la rangée y, entre x0 et x1.
+    Alignées d'une rangée à l'autre, ces piqûres creusent des sillons qui dessinent le motif dans le fil."""
+    def periodic(offset, period):
+        k = math.ceil((x0 - offset) / period)
+        return list(offset + np.arange(k, math.floor((x1 - offset) / period) + 1) * period)
+
+    if kind == "relief_stripes":
+        return periodic(0.0, 3.0)
+    if kind in ("relief_chevron", "relief_waves"):
+        t = y / 6.0
+        tri = 2 * abs(2 * (t - math.floor(t + 0.5))) - 1
+        return periodic(1.6 * (tri if kind == "relief_chevron" else math.sin(2 * math.pi * t)), 4.0)
+    if kind == "relief_bricks":
+        return periodic(3.0 * (math.floor(y / 3.0) % 2), 6.0)
+    if kind == "relief_diamonds":
+        return sorted(periodic(y % 5.0, 5.0) + periodic(-y % 5.0, 5.0))
+    if kind == "relief_circles":
+        grid, radius, out = 5.0, 2.4, []
+        for j in (math.floor(y / grid), math.floor(y / grid) + 1):
+            dy = y - j * grid
+            if abs(dy) < radius:
+                dx = math.sqrt(radius * radius - dy * dy)
+                for cx in periodic((j % 2) * grid / 2, grid):
+                    out += [cx - dx, cx + dx]
+        return sorted(out)
+    return []
+
+
+def _needle_points(cuts, x0, x1, max_len, min_len=0.7):
+    """Piqûres d'une rangée de x0 à x1 (x1 inclus) : celles du motif, complétées là où l'écart dépasse max_len."""
+    keep = []
+    for x in sorted(cuts):
+        if x0 + min_len <= x <= x1 - min_len and (not keep or x - keep[-1] >= min_len):
+            keep.append(x)
+    out, last = [], x0
+    for x in keep + [x1]:
+        n = max(1, math.ceil((x - last) / max_len))
+        out += [last + (x - last) * i / n for i in range(1, n + 1)]
+        last = x
+    return out
+
+
+def fill_runs_relief(mask, px_per_mm, row_spacing_mm, angle_deg, min_area_mm2, kind, max_len_mm=4.0,
+                     min_run_mm=0.3):
+    """Rangées de remplissage dont les piqûres suivent le motif `kind` ; chaque rangée porte `pts`,
+    les points à piquer après p0 (le dernier est p1)."""
+    prep = _rotated(mask, px_per_mm, angle_deg, min_area_mm2)
+    if prep is None:
+        return []
+    rot, labels, good, back, side = prep
+    step = max(1, round(row_spacing_mm * px_per_mm))
+    out = []
+    for ri, y in enumerate(range(0, side, step)):
+        ym = y / px_per_mm
+        # briques : rangée de joint horizontal en points courts (trait plus dense)
+        joint = kind == "relief_bricks" and (ym % 3.0) < row_spacing_mm
+        for x0, x1 in _runs(rot[y]):
+            if (x1 - x0) / px_per_mm < min_run_mm:
+                continue
+            comp = int(labels[y, x0])
+            if comp not in good:
+                continue
+            a, b = x0 / px_per_mm, x1 / px_per_mm
+            xs = _needle_points([] if joint else _relief_cuts(kind, ym, a, b), a, b, 1.2 if joint else max_len_mm)
+            out.append({"p0": back(x0, y), "p1": back(x1, y), "comp": comp, "row": ri,
+                        "pts": [back(x * px_per_mm, y) for x in xs]})
+    return out
 
 
 def zone_fill(kind, mask, px_per_mm, s):
@@ -147,10 +225,16 @@ def zone_fill(kind, mask, px_per_mm, s):
         for r in runs:
             r["max_len"] = 7.0
         return [("runs", runs)]
+    if kind == "satin_flow":
+        from .flow import satin_flow_runs
+        runs, gaps = satin_flow_runs(mask, px_per_mm)
+        return [("runs", fill_runs(gaps, px_per_mm, sp, ang, area)), ("runs", runs)]  # complément dessous, satin dessus
     if kind == "contour":
         return [("loops", contour_loops(mask, px_per_mm, max(0.45, sp * 1.25), s.outline_simplify_mm, area))]
     if kind in ("wave", "zigzag"):
         return [("runs", fill_runs_curved(mask, px_per_mm, sp, ang - 45.0, area, shape=kind))]
     if kind == "none":
         return []
+    if kind.startswith("relief_"):  # rangées horizontales : le motif apparaît droit, comme sur un nuancier
+        return [("runs", fill_runs_relief(mask, px_per_mm, sp, 0.0, area, kind))]
     return [("runs", fill_runs(mask, px_per_mm, sp, ang, area))]

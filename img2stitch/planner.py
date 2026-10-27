@@ -166,6 +166,9 @@ def plan_fill(sw: Sewer, runs):
             sw.move_to(entry)
             if "path" in r:  # rangée courbe (ondulé, zigzag)
                 sw.sew_path((r["path"] if e == 0 else r["path"][::-1])[1:])
+            elif "pts" in r:  # piqûres imposées (remplissage en relief)
+                for q in (r["pts"] if e == 0 else r["pts"][-2::-1] + [r["p0"]]):
+                    sw._stitch(*q)
             elif "max_len" in r:  # satin : un seul point d'un bord à l'autre
                 sw._line(sw.cur, exit_, r["max_len"])
             else:

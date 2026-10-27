@@ -137,15 +137,25 @@ def render_photo_preview(pattern, path, px_per_mm=22, thread_mm=0.42, fabric="cr
     threads = [_lin(np.array([(t.color >> 16) & 255, (t.color >> 8) & 255, t.color & 255], np.float32) / 255.0)
                for t in pattern.threadlist] or [_lin(np.array([.8, .1, .1], np.float32))]
     ci, last = 0, None
+    pen = np.zeros((H, W), np.float32)  # piqûres de l'aiguille
     for x, y, cmd in pattern.stitches:
         c = cmd & pe.COMMAND_MASK
         cur = to_px(x, y)
         if c == pe.STITCH and last is not None:
             _draw_stitch(Ht, Ct, Tt, cov, last, cur, threads[min(ci, len(threads) - 1)], r, thick,
                          twist_px=0.9 * ppm, rng=rng)
+            ix, iy = int(cur[0]), int(cur[1])
+            if 0 <= ix < W and 0 <= iy < H:
+                pen[iy, ix] += 1
         elif c == pe.COLOR_CHANGE:
             ci += 1
         last = cur
+
+    # Le fil est tiré dans le tissu à chaque piqûre : des piqûres alignées d'une rangée à l'autre creusent
+    # un sillon visible (c'est ce qui dessine les remplissages en relief) ; dispersées, un simple grain.
+    sig = 0.2 * ppm
+    groove = cv2.GaussianBlur(pen, (0, 0), sig) * (2 * math.pi * sig * sig)
+    Ht *= 1 - 0.62 * np.clip(groove, 0, 1.6) / 1.6
 
     # -- 2) éclairage des fils --------------------------------------------------------------------
     Hs = cv2.GaussianBlur(Ht, (0, 0), 0.6)

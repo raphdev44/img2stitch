@@ -351,10 +351,17 @@
       tatami_v: '<path d="M5 3v18M9 3v18M13 3v18M17 3v18M21 3v18"/>',
       cross: '<path d="M2 14 14 2M2 22 22 2M10 22l12-12M2 10 14 22M2 2l20 20M10 2l12 12"/>',
       satin: '<path d="M4 3v18M6 3v18M8 3v18M10 3v18M12 3v18M14 3v18M16 3v18M18 3v18M20 3v18"/>',
+      satin_flow: '<path d="M4 20q2-14 16-16" stroke-width="5" stroke-opacity=".25"/><path d="m3 18 3 3M4 14l5 4M6 10l5 5M9 7l5 4M13 4l4 5M17 3l3 4"/>',
       contour: '<rect x="3" y="3" width="18" height="18" rx="3"/><rect x="7" y="7" width="10" height="10" rx="2"/><rect x="11" y="11" width="2" height="2"/>',
       wave: '<path d="M2 6q2.5-3 5 0t5 0 5 0 5 0M2 12q2.5-3 5 0t5 0 5 0 5 0M2 18q2.5-3 5 0t5 0 5 0 5 0"/>',
       zigzag: '<path d="m2 7 3-3 3 3 3-3 3 3 3-3 3 3 3-3M2 13l3-3 3 3 3-3 3 3 3-3 3 3 3-3M2 19l3-3 3 3 3-3 3 3 3-3 3 3 3-3"/>',
       none: '<rect x="3" y="3" width="18" height="18" rx="3" stroke-dasharray="3 2.5"/>',
+      relief_stripes: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v18M12 3v18M16 3v18" stroke-dasharray="1 1.6"/>',
+      relief_chevron: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m6 3 3 4.5L6 12l3 4.5L6 21M12 3l3 4.5-3 4.5 3 4.5-3 4.5" stroke-dasharray="1 1.6"/>',
+      relief_waves: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3q3 4.5 0 9t0 9M14 3q3 4.5 0 9t0 9" stroke-dasharray="1 1.6"/>',
+      relief_bricks: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v6M15 3v6M6 9v6M12 9v6M18 9v6M9 15v6M15 15v6" stroke-dasharray="1 1.6"/>',
+      relief_diamonds: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m3 9 6-6 12 12M3 15 15 3l6 6M9 21l12-12M3 9l12 12" stroke-dasharray="1 1.6"/>',
+      relief_circles: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="3" stroke-dasharray="1 1.6"/><circle cx="16" cy="8" r="3" stroke-dasharray="1 1.6"/><circle cx="12" cy="15" r="3" stroke-dasharray="1 1.6"/>',
     };
     const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${FILL_ICONS[k] || ""}</svg>`;
     const changed = (i) => edits[i].color !== zones[i].color || edits[i].fill !== zones[i].fill;
@@ -500,7 +507,7 @@
     // -- menu contextuel --------------------------------------------------------------------
     function select(t, x, y, mask) {
       target = t;
-      selMask = mask || (t.type === "block" ? blockMask(t.i) : pending[t.j].mask);
+      selMask = mask || (t.type === "region" ? pending[t.j].mask : zmap ? blockMask(t.i) : null);
       renderList();
       draw();
       openMenu(x, y);
@@ -562,21 +569,31 @@
     $("#zm-picker").addEventListener("change", () => renderPalette());
 
     function renderFills() {
-      $("#zm-fills").replaceChildren(...fillList.map(([k, label]) => {
+      const items = [];
+      fillList.forEach(([k, label]) => {
+        const relief = k.startsWith("relief_");
+        if (relief && !items.some((el) => el.classList.contains("zm-group"))) {
+          const h = document.createElement("p");
+          h.className = "zm-label zm-group";
+          h.textContent = "En relief";
+          items.push(h);
+        }
         const b = document.createElement("button");
         b.type = "button";
         b.className = "zm-fill";
         b.setAttribute("role", "radio");
         b.setAttribute("aria-checked", String(k === cur().fill));
-        b.innerHTML = `${icon(k)}<span>${label}</span>${k === "tatami" ? "<em>par défaut</em>" : ""}`;
+        const shown = relief ? label.replace(/^Relief : (.)/, (_, c) => c.toUpperCase()) : label;
+        b.innerHTML = `${icon(k)}<span>${shown}</span>${k === "tatami" ? "<em>par défaut</em>" : ""}`;
         b.addEventListener("click", () => {
           cur().fill = k;
           $("#zm-fill").textContent = label;
           renderFills();
           renderList();
         });
-        return b;
-      }));
+        items.push(b);
+      });
+      $("#zm-fills").replaceChildren(...items);
     }
 
     // -- appliquer / annuler ----------------------------------------------------------------
