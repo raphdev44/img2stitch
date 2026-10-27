@@ -18,7 +18,78 @@
       out.textContent = range.value;
       const p = ((range.value - range.min) / (range.max - range.min)) * 100;
       range.style.setProperty("--p", `${p}%`);
+      renderPalette();
     };
+
+    // Pastilles des couleurs retenues pour la valeur courante de la jauge ; clic = menu "Supprimer cette couleur"
+    const paletteEl = $("#palette");
+    const removedEl = $("#palette-removed");
+    const menu = $("#swatch-menu");
+    let palettes = null;
+    let excluded = [];
+    let menuColor = null;
+
+    const swatch = (c, title) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.style.setProperty("--c", c);
+      b.title = title;
+      b.setAttribute("aria-label", title);
+      return b;
+    };
+    const currentColors = () => palettes?.[range.value] || [];
+
+    function renderPalette() {
+      const colors = currentColors();
+      paletteEl.hidden = !colors.length;
+      paletteEl.replaceChildren(...colors.map((c) => {
+        const b = swatch(c, `${c} – cliquer pour supprimer cette couleur`);
+        b.addEventListener("click", (e) => { e.stopPropagation(); openMenu(b, c); });
+        return b;
+      }));
+      removedEl.hidden = !excluded.length;
+      removedEl.replaceChildren("Supprimées :", ...excluded.map((ex, i) => {
+        const b = swatch(ex.color, `${ex.color} – cliquer pour rétablir cette couleur`);
+        b.addEventListener("click", () => restoreColor(i));
+        return b;
+      }));
+    }
+
+    function openMenu(anchor, color) {
+      menuColor = color;
+      const field = $("#colors-field").getBoundingClientRect();
+      const r = anchor.getBoundingClientRect();
+      menu.style.left = `${r.left - field.left}px`;
+      menu.style.top = `${r.bottom - field.top + 6}px`;
+      $("button", menu).disabled = currentColors().length <= 1;
+      menu.hidden = false;
+      $("button", menu).focus();
+    }
+    const closeMenu = () => { menu.hidden = true; menuColor = null; };
+    document.addEventListener("click", (e) => { if (!menu.contains(e.target)) closeMenu(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+
+    $("button", menu).addEventListener("click", () => {
+      const colors = currentColors();
+      if (!menuColor || colors.length <= 1) return;
+      const others = colors.filter((c) => c !== menuColor);
+      excluded.push({ color: menuColor, others });
+      closeMenu();
+      const n = Math.max(1, Math.min(+range.value, colors.length) - 1);
+      palettes = { ...palettes, [n]: others };  // retour immédiat en attendant la nouvelle analyse
+      range.value = n;
+      userTouched = true;
+      syncRange();
+      analyse();
+    });
+
+    function restoreColor(i) {
+      excluded.splice(i, 1);
+      range.value = Math.min(+range.max, +range.value + 1);
+      userTouched = true;
+      syncRange();
+      analyse();
+    }
     range.addEventListener("input", syncRange);
     syncRange();
 
@@ -48,12 +119,15 @@
       const data = new FormData();
       data.append("image", file);
       data.append("background", bgValue());
+      data.append("exclude", JSON.stringify(excluded));
       try {
         const res = await fetch(form.dataset.analyse, { method: "POST", body: data });
         const json = await res.json();
         if (id !== analyseId) return;
         if (!res.ok) throw new Error(json.error);
-        if (!userTouched) { range.value = json.colors; syncRange(); }
+        palettes = json.palettes;
+        if (!userTouched) range.value = json.colors;
+        syncRange();
         if (!sizeTouched) { sizeInputs[0].value = json.width_mm; sizeInputs[1].value = json.height_mm; }
         const s = json.colors > 1 ? "s" : "";
         const bgNote = bgValue() === "keep" ? "" : " (fond exclu)";
@@ -84,6 +158,9 @@
       btn.disabled = false;
       userTouched = false;
       sizeTouched = false;
+      palettes = null;
+      excluded = [];
+      renderPalette();
       analyse();
     };
 
@@ -112,6 +189,7 @@
       data.append("background", bgValue());
       data.append("width_mm", sizeInputs[0].value);
       data.append("height_mm", sizeInputs[1].value);
+      data.append("exclude", JSON.stringify(excluded));
       try {
         const res = await fetch(form.action, { method: "POST", body: data });
         const json = await res.json().catch(() => ({}));

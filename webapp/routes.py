@@ -4,7 +4,7 @@ from flask import Blueprint, abort, current_app, jsonify, render_template, reque
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from .designs import (BACKGROUND_MODES, DEFAULT_SIZE_MM, FORMATS, MAX_COLORS, MAX_SIZE_MM, MIN_COLORS, MIN_SIZE_MM,
-                      InvalidImage, analyse_image)
+                      InvalidImage, analyse_image, parse_exclusions)
 
 bp = Blueprint("web", __name__)
 
@@ -86,7 +86,8 @@ def api_create():
     if not all(MIN_SIZE_MM <= v <= MAX_SIZE_MM for v in target):
         return jsonify(error=f"La largeur et la hauteur doivent être comprises entre {MIN_SIZE_MM} et {MAX_SIZE_MM} mm."), 400
     try:
-        design_id = store().create(f.stream, f.filename, n_colors, background, target)
+        excluded = parse_exclusions(request.form.get("exclude"))
+        design_id = store().create(f.stream, f.filename, n_colors, background, target, excluded)
     except InvalidImage as e:
         return jsonify(error=str(e)), 400
     return jsonify(_public(store().get(design_id))), 202
@@ -101,7 +102,7 @@ def api_analyse():
     if background not in BACKGROUND_MODES:
         return jsonify(error="Option d'arrière-plan invalide."), 400
     try:
-        return jsonify(analyse_image(f.stream, background))
+        return jsonify(analyse_image(f.stream, background, parse_exclusions(request.form.get("exclude"))))
     except InvalidImage as e:
         return jsonify(error=str(e)), 400
 

@@ -24,9 +24,10 @@ def _nearest(points, centers, chunk=200_000):
     return out
 
 
-def _reduce_colors(pix, n_colors, n_fine=48, min_share=0.0005, stop_delta=None):
+def _reduce_colors(pix, n_colors, n_fine=48, min_share=0.0005, stop_delta=None, history=None):
     """Réduit les couleurs en fusionnant toujours les deux groupes les plus proches (distance Lab).
     Si `stop_delta` est donné, s'arrête dès que toutes les couleurs restantes en sont plus éloignées.
+    Si `history` (dict) est donné, il reçoit {nombre de couleurs: palette} à chaque étape.
 
     Retourne (centres_fins_lab, groupe_de_chaque_centre_fin, palette_rgb)."""
     lab = _to_lab(pix)
@@ -47,12 +48,19 @@ def _reduce_colors(pix, n_colors, n_fine=48, min_share=0.0005, stop_delta=None):
     group = np.arange(k)
     active = n > 0
 
+    def snapshot():
+        if history is not None:
+            history[int(active.sum())] = [tuple(int(round(c)) for c in g_rgb[f] / n[f]) for f in np.flatnonzero(active)]
+
     def merge(a, b):
         g_lab[a] = (g_lab[a] * n[a] + g_lab[b] * n[b]) / (n[a] + n[b])
         g_rgb[a] += g_rgb[b]
         n[a] += n[b]
         active[b] = False
         group[group == b] = a
+        snapshot()
+
+    snapshot()
 
     # 1) Poussières (bruit, franges d'anti-crénelage) : rattachées à leur couleur la plus proche
     while active.sum() > n_colors:
@@ -90,8 +98,10 @@ def _touching_border(mask):
     return np.isin(labels, np.unique(edge[edge_mask]))
 
 
-def _embroidered_pixels(src, width_px, background="auto", bg_tol=40, bg_scope="all"):
-    """Image redimensionnée -> (rgb int (H,W,3), masque des pixels à broder). `src` : chemin, fichier ou image PIL."""
+def _embroidered_pixels(src, width_px, background="auto", bg_tol=40, bg_scope="all", exclude=()):
+    """Image redimensionnée -> (rgb int (H,W,3), masque des pixels à broder). `src` : chemin, fichier ou image PIL.
+    `exclude` : couleurs à ne pas broder, liste de (couleur, autres_couleurs_de_la_palette) ; un pixel est retiré
+    s'il est plus proche de la couleur exclue que de toutes les autres (même règle que l'attribution des fils)."""
     img = (src if isinstance(src, Image.Image) else Image.open(src)).convert("RGBA")
     h = max(1, round(img.height * width_px / img.width))
     img = img.resize((width_px, h), Image.LANCZOS)
@@ -116,6 +126,15 @@ def _embroidered_pixels(src, width_px, background="auto", bg_tol=40, bg_scope="a
         if bg_scope == "outside":
             is_bg = _touching_border(is_bg)
         keep &= ~is_bg
+    if exclude and keep.any():
+        lab = _to_lab(rgb[keep])
+        drop = np.zeros(len(lab), bool)
+        for color, others in exclude:
+            d_ex = np.linalg.norm(lab - _to_lab(np.array([color])), axis=1)
+            d_other = (np.linalg.norm(lab[:, None] - _to_lab(np.array(others))[None], axis=2).min(axis=1)
+                       if len(others) else np.inf)
+            drop |= d_ex < d_other
+        keep[keep] = ~drop
     return rgb, keep
 
 
@@ -150,14 +169,14 @@ def _frame(is_bg, rgb, tol, max_share=0.02):
 
 
 def estimate_colors(src, background="auto", bg_tol=40, bg_scope="all", max_colors=12,
-                    min_delta_e=15.0, min_share=0.005, width_px=800):
+                    min_delta_e=15.0, min_share=0.005, width_px=800, exclude=()):
     """Nombre de couleurs réellement distinctes à l'œil dans la zone à broder (fond exclu).
 
     Deux couleurs à moins de `min_delta_e` (CIELAB) sont confondues ; les transitions (flou,
     anti-crénelage) et les zones de moins de `min_share` de la surface sont ignorées."""
     img = src if isinstance(src, Image.Image) else Image.open(src)
     # Jamais d'agrandissement : il élargirait les transitions floues au point d'en faire des aplats
-    rgb, keep = _embroidered_pixels(img, min(width_px, img.width), background, bg_tol, bg_scope)
+    rgb, keep = _embroidered_pixels(img, min(width_px, img.width), background, bg_tol, bg_scope, exclude)
     if not keep.any():
         return 0
     lab = _to_lab(rgb.reshape(-1, 3)).reshape(rgb.shape)
@@ -203,10 +222,29 @@ def _is_mixture(c, others, tol=25.0):
     return False
 
 
-def load_and_quantize(path, width_px, n_colors, background="auto", bg_tol=40, bg_scope="all"):
+def color_palettes(src, background="auto", bg_tol=40, bg_scope="all", max_colors=12, width_px=800, exclude=()):
+    """Palette retenue pour chaque nombre de couleurs de 1 à `max_colors` : {n: [(r,g,b), ...]} (clair d'abord).
+    Si l'image a moins de couleurs que n, la palette complète est répétée."""
+    img = src if isinstance(src, Image.Image) else Image.open(src)
+    rgb, keep = _embroidered_pixels(img, min(width_px, img.width), background, bg_tol, bg_scope, exclude)
+    if not keep.any():
+        return {}
+    pix = rgb[keep]
+    if len(pix) > 50000:
+        pix = pix[np.random.default_rng(0).choice(len(pix), 50000, replace=False)]
+    history = {}
+    _reduce_colors(pix, 1, history=history)
+    out, last = {}, None
+    for n in range(1, max_colors + 1):
+        last = history.get(n, last)
+        out[n] = sorted(last, key=lambda c: -sum(c))
+    return out
+
+
+def load_and_quantize(path, width_px, n_colors, background="auto", bg_tol=40, bg_scope="all", exclude=()):
     """Retourne (palette, masks) ; palette = liste de (r,g,b), masks = liste de tableaux bool.
     bg_scope : "all" retire tous les pixels de la couleur du fond, "outside" seulement ceux reliés aux bords."""
-    rgb, keep = _embroidered_pixels(path, width_px, background, bg_tol, bg_scope)
+    rgb, keep = _embroidered_pixels(path, width_px, background, bg_tol, bg_scope, exclude)
     if not keep.any():
         return [], []
 

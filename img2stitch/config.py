@@ -16,6 +16,7 @@ class Settings:
     background: str = "auto"        # "auto", "none" ou "#RRGGBB"
     background_scope: str = "all"   # "all" : toute zone de la couleur du fond ; "outside" : seulement le fond relié aux bords
     background_tolerance: int = 40  # distance RGB pour considérer un pixel comme fond
+    exclude_colors: tuple = ()      # couleurs à ne pas broder : ((r,g,b), ((r,g,b) des autres couleurs de la palette)), ...
     center_on_origin: bool = True   # centre le motif sur (0,0) = centre du cerceau, comme l'attendent les machines
     stagger: bool = True            # décale les points d'une rangée à l'autre (aspect "brique", plus régulier)
 

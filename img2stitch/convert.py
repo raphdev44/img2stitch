@@ -57,7 +57,8 @@ def image_to_pattern(path, settings: Settings = None):
 
     # 1re estimation : part de l'image occupée par la zone à broder (fond exclu)
     probe_px = 1000
-    _, keep = _embroidered_pixels(path, probe_px, s.background, s.background_tolerance, s.background_scope)
+    _, keep = _embroidered_pixels(path, probe_px, s.background, s.background_tolerance, s.background_scope,
+                                  s.exclude_colors)
     if not keep.any():
         return _build_pattern(path, s)
     ys, xs = np.nonzero(keep)
@@ -82,7 +83,8 @@ def image_to_pattern(path, settings: Settings = None):
 def _build_pattern(path, s: Settings):
     px_per_mm = 10  # résolution de travail : 10 px par mm
     palette, masks = load_and_quantize(
-        path, round(s.width_mm * px_per_mm), s.n_colors, s.background, s.background_tolerance, s.background_scope
+        path, round(s.width_mm * px_per_mm), s.n_colors, s.background, s.background_tolerance, s.background_scope,
+        s.exclude_colors
     )
     pattern = pe.EmbPattern()
     if not masks:

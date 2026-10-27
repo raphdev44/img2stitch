@@ -14,8 +14,8 @@ import pyembroidery as pe
 from PIL import Image, ImageOps
 from werkzeug.utils import secure_filename
 
-from img2stitch import (Settings, estimate_colors, image_to_pattern, natural_size_mm, render_photo_preview,
-                        render_raw_preview)
+from img2stitch import (Settings, color_palettes, estimate_colors, image_to_pattern, natural_size_mm,
+                        render_photo_preview, render_raw_preview)
 from img2stitch.convert import SIZE_MARGIN_MM, pattern_stats
 from img2stitch.photo import stitch_bbox_mm
 
@@ -93,7 +93,7 @@ class DesignStore:
         return d / f"pattern.{fmt}"
 
     # --- Création ---
-    def create(self, stream, filename, n_colors, background, target_mm):
+    def create(self, stream, filename, n_colors, background, target_mm, excluded=()):
         img = _load_image(stream)
         design_id = uuid.uuid4().hex
         d = self.root / design_id
@@ -107,6 +107,7 @@ class DesignStore:
             "n_colors": n_colors,
             "background": background,
             "target_mm": list(target_mm),
+            "excluded": list(excluded),
             "status": "processing",
             "step": "Analyse de l'image",
             "error": None,
@@ -121,7 +122,8 @@ class DesignStore:
             bg, scope = BACKGROUND_MODES[meta["background"]]
             max_w, max_h = meta["target_mm"]
             s = Settings(n_colors=meta["n_colors"], background=bg, background_scope=scope,
-                         max_width_mm=max_w, max_height_mm=max_h)
+                         max_width_mm=max_w, max_height_mm=max_h,
+                         exclude_colors=_exclude_setting(meta.get("excluded", [])))
             pattern = image_to_pattern(str(d / SOURCE), s)
             stats = pattern_stats(pattern)
             if stats["stitches"] == 0:
@@ -178,17 +180,46 @@ class DesignStore:
             os.replace(tmp, d / META)
 
 
-def analyse_image(stream, background):
+_HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def parse_exclusions(raw):
+    """JSON envoyé par le formulaire -> [{"color": "#rrggbb", "others": ["#rrggbb", ...]}, ...] validé."""
+    if not raw:
+        return []
+    try:
+        items = json.loads(raw)
+    except ValueError:
+        raise InvalidImage("Couleurs supprimées invalides.")
+    ok = (isinstance(items, list) and len(items) <= MAX_COLORS and all(
+        isinstance(it, dict) and isinstance(it.get("color"), str) and _HEX_RE.match(it["color"])
+        and isinstance(it.get("others"), list) and len(it["others"]) <= MAX_COLORS
+        and all(isinstance(o, str) and _HEX_RE.match(o) for o in it["others"]) for it in items))
+    if not ok:
+        raise InvalidImage("Couleurs supprimées invalides.")
+    return [{"color": it["color"].lower(), "others": [o.lower() for o in it["others"]]} for it in items]
+
+
+def _exclude_setting(excluded):
+    rgb = lambda h: tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
+    return tuple((rgb(e["color"]), tuple(rgb(o) for o in e["others"])) for e in excluded)
+
+
+def analyse_image(stream, background, excluded=()):
     """Valeurs conseillées pour l'image envoyée : nombre de couleurs et taille optimale calculée par le moteur."""
     bg, scope = BACKGROUND_MODES[background]
+    ex = _exclude_setting(excluded)
     img = _load_image(stream)
-    colors = max(MIN_COLORS, estimate_colors(img, background=bg, bg_scope=scope, max_colors=MAX_COLORS))
-    w, h = natural_size_mm(img, Settings(n_colors=colors, background=bg, background_scope=scope))
+    colors = max(MIN_COLORS, estimate_colors(img, background=bg, bg_scope=scope, max_colors=MAX_COLORS, exclude=ex))
+    w, h = natural_size_mm(img, Settings(n_colors=colors, background=bg, background_scope=scope, exclude_colors=ex))
     if not w or not h:
         w = h = DEFAULT_SIZE_MM
     # Arrondi au 1/10 mm supérieur + marge : garder ces valeurs redonne exactement cette taille
     fit = lambda v: min(MAX_SIZE_MM, max(MIN_SIZE_MM, math.ceil((v + SIZE_MARGIN_MM) * 10) / 10))
-    return {"colors": colors, "width_mm": fit(w), "height_mm": fit(h)}
+    palettes = {n: ["#%02x%02x%02x" % c for c in pal]
+                for n, pal in color_palettes(img, background=bg, bg_scope=scope, max_colors=MAX_COLORS,
+                                             exclude=ex).items()}
+    return {"colors": colors, "width_mm": fit(w), "height_mm": fit(h), "palettes": palettes}
 
 
 def _write_atomic(path, write):
