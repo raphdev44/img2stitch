@@ -13,6 +13,9 @@ Image (PNG/JPG) -> fichier de broderie machine (.dst, .pes, .jef, .exp, .vp3...)
 
 `--width` est la largeur de l'IMAGE entière (marges blanches comprises), pas celle du motif brodé.
 
+`--background-scope outside` ne retire que le fond relié aux bords de l'image : les zones de la même couleur
+à l'intérieur du motif sont brodées. Par défaut (`all`), toutes les zones de la couleur du fond sont retirées.
+
 ## Sauts et coupes de fil
 Le parcours est optimisé pour limiter les sauts : un déplacement est piqué "à couvert" (sous une couleur
 posée plus tard) quand c'est possible, sinon c'est un saut, précédé d'une coupe (TRIM) s'il dépasse

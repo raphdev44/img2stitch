@@ -33,16 +33,24 @@
       <p class="hint">Chaque couleur correspond à un fil. Le fond n'est pas compté.</p>
     </div>
 
-    <div class="field">
-      <label class="switch">
-        <input type="checkbox" name="remove_background" id="remove-bg" checked>
-        <span class="track"><span class="thumb"></span></span>
-        <span class="switch-label">
-          <strong>Supprimer l'arrière-plan</strong>
-          <small>Le fond détecté sur les bords de l'image ne sera pas brodé.</small>
-        </span>
+    <fieldset class="field choices">
+      <legend>Arrière-plan</legend>
+      <label class="choice">
+        <input type="radio" name="background" value="outside" checked>
+        <span><strong>Supprimer le fond autour du motif</strong>
+          <small>Les zones de la même couleur à l'intérieur du motif sont conservées et brodées.</small></span>
       </label>
-    </div>
+      <label class="choice">
+        <input type="radio" name="background" value="all">
+        <span><strong>Supprimer le fond et toutes les zones de sa couleur</strong>
+          <small>Les zones intérieures de la couleur du fond restent vides (tissu apparent).</small></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="background" value="keep">
+        <span><strong>Conserver le fond</strong>
+          <small>Toute l'image est brodée, fond compris.</small></span>
+      </label>
+    </fieldset>
 
     <p class="form-error" id="form-error" role="alert" hidden></p>
 

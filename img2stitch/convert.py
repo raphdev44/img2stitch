@@ -25,7 +25,7 @@ def image_to_pattern(path, settings: Settings = None):
     s = settings or Settings()
     px_per_mm = 10  # résolution de travail : 10 px par mm
     palette, masks = load_and_quantize(
-        path, round(s.width_mm * px_per_mm), s.n_colors, s.background, s.background_tolerance
+        path, round(s.width_mm * px_per_mm), s.n_colors, s.background, s.background_tolerance, s.background_scope
     )
     pattern = pe.EmbPattern()
     if not masks:

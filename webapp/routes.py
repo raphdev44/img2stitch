@@ -3,9 +3,11 @@ from datetime import datetime
 from flask import Blueprint, abort, current_app, jsonify, render_template, request, send_file, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from .designs import FORMATS, MAX_COLORS, MIN_COLORS, InvalidImage
+from .designs import BACKGROUND_MODES, FORMATS, MAX_COLORS, MIN_COLORS, InvalidImage
 
 bp = Blueprint("web", __name__)
+
+BG_LABELS = {"outside": "fond extérieur supprimé", "all": "fond et zones identiques supprimés", "keep": "fond conservé"}
 
 
 def store():
@@ -13,7 +15,7 @@ def store():
 
 
 def _public(meta):
-    out = {k: meta.get(k) for k in ("id", "name", "created_at", "n_colors", "remove_background",
+    out = {k: meta.get(k) for k in ("id", "name", "created_at", "n_colors", "background",
                                      "status", "step", "error", "stats", "threads", "size_mm")}
     out["urls"] = {
         "page": url_for("web.design", design_id=meta["id"]),
@@ -44,7 +46,7 @@ def gallery():
 @bp.get("/motifs/<design_id>")
 def design(design_id):
     meta = store().get(design_id) or abort(404)
-    return render_template("design.html", d=meta, formats=FORMATS)
+    return render_template("design.html", d=meta, formats=FORMATS, bg_labels=BG_LABELS)
 
 
 @bp.get("/motifs/<design_id>/fichiers/<name>")
@@ -72,9 +74,11 @@ def api_create():
         return jsonify(error="Nombre de couleurs invalide."), 400
     if not MIN_COLORS <= n_colors <= MAX_COLORS:
         return jsonify(error=f"Le nombre de couleurs doit être compris entre {MIN_COLORS} et {MAX_COLORS}."), 400
-    remove_bg = request.form.get("remove_background") in ("1", "true", "on")
+    background = request.form.get("background", "outside")
+    if background not in BACKGROUND_MODES:
+        return jsonify(error="Option d'arrière-plan invalide."), 400
     try:
-        design_id = store().create(f.stream, f.filename, n_colors, remove_bg)
+        design_id = store().create(f.stream, f.filename, n_colors, background)
     except InvalidImage as e:
         return jsonify(error=str(e)), 400
     return jsonify(_public(store().get(design_id))), 202

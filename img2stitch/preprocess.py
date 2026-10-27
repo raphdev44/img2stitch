@@ -1,4 +1,5 @@
 """Étape 1 : image -> N couleurs + masques binaires (un par fil)."""
+import cv2
 import numpy as np
 from PIL import Image, ImageFilter
 
@@ -26,8 +27,17 @@ def _kmeans(pixels, k, iters=15):
     return centers
 
 
-def load_and_quantize(path, width_px, n_colors, background="auto", bg_tol=40):
-    """Retourne (palette, masks) ; palette = liste de (r,g,b), masks = liste de tableaux bool."""
+def _touching_border(mask):
+    """Ne garde que les zones de `mask` reliées au bord de l'image."""
+    _, labels = cv2.connectedComponents(mask.astype(np.uint8), connectivity=4)
+    edge = np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]])
+    edge_mask = np.concatenate([mask[0], mask[-1], mask[:, 0], mask[:, -1]])
+    return np.isin(labels, np.unique(edge[edge_mask]))
+
+
+def load_and_quantize(path, width_px, n_colors, background="auto", bg_tol=40, bg_scope="all"):
+    """Retourne (palette, masks) ; palette = liste de (r,g,b), masks = liste de tableaux bool.
+    bg_scope : "all" retire tous les pixels de la couleur du fond, "outside" seulement ceux reliés aux bords."""
     img = Image.open(path).convert("RGBA")
     h = max(1, round(img.height * width_px / img.width))
     img = img.resize((width_px, h), Image.LANCZOS)
@@ -44,7 +54,10 @@ def load_and_quantize(path, width_px, n_colors, background="auto", bg_tol=40):
     elif background not in ("none", None):
         bg_rgb = _parse_hex(background)
     if bg_rgb is not None:
-        keep &= np.linalg.norm(rgb - bg_rgb, axis=-1) > bg_tol
+        is_bg = np.linalg.norm(rgb - bg_rgb, axis=-1) <= bg_tol
+        if bg_scope == "outside":
+            is_bg = _touching_border(is_bg)
+        keep &= ~is_bg
     if not keep.any():
         return [], []
 

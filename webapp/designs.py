@@ -34,6 +34,12 @@ PUBLIC_FILES = {SOURCE, RAW, PHOTO, THUMB}
 MIN_COLORS, MAX_COLORS = 1, 12
 MAX_PIXELS = 40_000_000
 ACCEPTED_FORMATS = {"PNG", "JPEG", "WEBP", "AVIF"}
+# mode web -> (Settings.background, Settings.background_scope)
+BACKGROUND_MODES = {
+    "outside": ("auto", "outside"),
+    "all": ("auto", "all"),
+    "keep": ("none", "all"),
+}
 _ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
@@ -61,6 +67,7 @@ class DesignStore:
         if d is None:
             return None
         meta = self._read(d)
+        meta.setdefault("background", "all" if meta.pop("remove_background", True) else "keep")
         meta["has_raw"] = (d / RAW).is_file()
         meta["has_photo"] = (d / PHOTO).is_file()
         meta["has_thumb"] = (d / THUMB).is_file()
@@ -83,7 +90,7 @@ class DesignStore:
         return d / f"pattern.{fmt}"
 
     # --- Création ---
-    def create(self, stream, filename, n_colors, remove_background):
+    def create(self, stream, filename, n_colors, background):
         img = _load_image(stream)
         design_id = uuid.uuid4().hex
         d = self.root / design_id
@@ -95,7 +102,7 @@ class DesignStore:
             "name": stem,
             "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "n_colors": n_colors,
-            "remove_background": remove_background,
+            "background": background,
             "status": "processing",
             "step": "Analyse de l'image",
             "error": None,
@@ -107,7 +114,8 @@ class DesignStore:
     def _generate(self, d):
         meta = self._read(d)
         try:
-            s = Settings(n_colors=meta["n_colors"], background="auto" if meta["remove_background"] else "none")
+            bg, scope = BACKGROUND_MODES[meta["background"]]
+            s = Settings(n_colors=meta["n_colors"], background=bg, background_scope=scope)
             pattern = image_to_pattern(str(d / SOURCE), s)
             stats = pattern_stats(pattern)
             if stats["stitches"] == 0:

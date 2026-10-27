@@ -63,7 +63,7 @@
       const data = new FormData();
       data.append("image", file);
       data.append("colors", range.value);
-      data.append("remove_background", $("#remove-bg").checked ? "1" : "0");
+      data.append("background", $("input[name=background]:checked", form).value);
       try {
         const res = await fetch(form.action, { method: "POST", body: data });
         const json = await res.json().catch(() => ({}));
