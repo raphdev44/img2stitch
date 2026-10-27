@@ -9,7 +9,7 @@
   </div>
 </div>
 
-<form id="cross-stitch-form" class="create-card cross-create" action="{{ url_for('web.api_create_cross_stitch') }}" method="post" enctype="multipart/form-data">
+<form id="cross-stitch-form" class="create-card cross-create" action="{{ url_for('web.api_create_cross_stitch') }}" data-analyse="{{ url_for('web.api_analyse_cross_stitch') }}" method="post" enctype="multipart/form-data" novalidate>
   <label class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Importer un pixel art">
     <input type="file" name="image" id="image-input" accept="image/png,image/jpeg,image/webp,image/avif,.avif" hidden>
     <div class="dz-empty">
@@ -24,6 +24,7 @@
   </label>
 
   <div class="options">
+    {% include "_colors.html" %}
     <fieldset class="field choices">
       <legend>Arrière-plan</legend>
       <label class="choice">

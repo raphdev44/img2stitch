@@ -3,8 +3,8 @@ from datetime import datetime
 from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, send_file, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from .designs import (BACKGROUND_MODES, DEFAULT_SIZE_MM, FABRICS, FILL_TYPES, FORMATS, MAX_COLORS, MAX_SIZE_MM,
-                      MIN_COLORS, MIN_SIZE_MM, ZONES, InvalidImage, analyse_image, clean_name, export_filename,
+from .designs import (BACKGROUND_MODES, CROSS_STITCH_MAX_COLORS, DEFAULT_SIZE_MM, FABRICS, FILL_TYPES, FORMATS, MAX_COLORS, MAX_SIZE_MM,
+                      MIN_COLORS, MIN_SIZE_MM, ZONES, InvalidImage, analyse_cross_stitch_image, analyse_image, clean_name, export_filename,
                       parse_edits, parse_exclusions)
 from .designs import _HEX_RE as HEX_RE
 
@@ -27,7 +27,7 @@ def _file_url(meta, name):
 def _public(meta):
     out = {k: meta.get(k) for k in ("id", "name", "created_at", "n_colors", "background", "target_mm",
                                      "status", "step", "error", "stats", "threads", "size_mm", "fabric",
-                                     "photo_error", "edit_error", "mode", "grid")}
+                                     "photo_error", "edit_error", "mode", "grid", "cross_stitch_color_limit")}
     out["photo_rendering"] = bool(meta.get("photo_rendering"))
     out["urls"] = {
         "page": url_for("web.design", design_id=meta["id"]),
@@ -58,7 +58,36 @@ def gallery():
 
 @bp.get("/pixel-art")
 def create_cross_stitch():
-    return render_template("cross_stitch.html")
+    return render_template("cross_stitch.html", min_colors=MIN_COLORS, max_colors=MAX_COLORS)
+
+
+@bp.post("/api/pixel-art/analyse")
+def api_analyse_cross_stitch():
+    image = request.files.get("image")
+    if image is None or not image.filename:
+        return jsonify(error="Aucune image envoyée."), 400
+    background = request.form.get("background", "outside")
+    if background not in BACKGROUND_MODES:
+        return jsonify(error="Option d'arrière-plan invalide."), 400
+    try:
+        return jsonify(analyse_cross_stitch_image(image.stream, background,
+                                                  parse_exclusions(request.form.get("exclude"))))
+    except InvalidImage as exc:
+        return jsonify(error=str(exc)), 400
+
+
+def _cross_stitch_colors(raw):
+    if isinstance(raw, bool) or not isinstance(raw, (str, int, type(None))):
+        raise InvalidImage("Nombre de couleurs invalide.")
+    try:
+        count = int(raw) if raw not in (None, "") else 0
+    except ValueError:
+        raise InvalidImage("Nombre de couleurs invalide.")
+    if count == 0:
+        return None
+    if not 1 <= count <= CROSS_STITCH_MAX_COLORS:
+        raise InvalidImage("Le nombre de couleurs doit être compris entre 1 et 256.")
+    return count
 
 
 @bp.post("/api/pixel-art")
@@ -70,9 +99,30 @@ def api_create_cross_stitch():
     if background not in BACKGROUND_MODES:
         return jsonify(error="Option d'arrière-plan invalide."), 400
     try:
-        design_id = store().create(image.stream, image.filename, 0, background, None, mode="cross_stitch")
+        colors = _cross_stitch_colors(request.form.get("colors"))
+        excluded = parse_exclusions(request.form.get("exclude"))
+        design_id = store().create(image.stream, image.filename, colors or 0, background, None,
+                       excluded=excluded, mode="cross_stitch")
     except InvalidImage as exc:
         return jsonify(error=str(exc)), 400
+    return jsonify(_public(store().get(design_id))), 202
+
+
+@bp.post("/api/motifs/<design_id>/couleurs")
+def api_cross_stitch_colors(design_id):
+    if store().get(design_id) is None:
+        abort(404)
+    body = request.get_json(silent=True)
+    try:
+        if not isinstance(body, dict) or "colors" not in body:
+            raise InvalidImage("Nombre de couleurs invalide.")
+        colors = _cross_stitch_colors(body["colors"])
+    except InvalidImage as exc:
+        return jsonify(error=str(exc)), 400
+    try:
+        store().set_cross_stitch_colors(design_id, colors)
+    except InvalidImage as exc:
+        return jsonify(error=str(exc)), 409
     return jsonify(_public(store().get(design_id))), 202
 
 

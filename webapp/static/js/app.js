@@ -114,75 +114,9 @@
     };
   }
 
-  if (page === "cross-stitch") {
-    const form = $("#cross-stitch-form");
-    const input = $("#image-input");
-    const zone = $("#dropzone");
-    const btn = $("#submit-btn");
-    const err = $("#form-error");
-    const preview = $("#image-preview");
-    let file = null;
-    const showError = (message) => { err.textContent = message; err.hidden = !message; };
-    const setFile = (next) => {
-      if (!next) return;
-      if (!/\.(png|jpe?g|webp|avif)$/i.test(next.name)) {
-        showError("Format non pris en charge : choisissez une image PNG, JPG, WebP ou AVIF.");
-        return;
-      }
-      if (next.size > 20 * 1024 * 1024) {
-        showError("Fichier trop volumineux (20 Mo maximum).");
-        return;
-      }
-      showError("");
-      file = next;
-      if (preview.src) URL.revokeObjectURL(preview.src);
-      preview.src = URL.createObjectURL(file);
-      $("#image-name").textContent = file.name;
-      $(".dz-empty", zone).hidden = true;
-      $(".dz-preview", zone).hidden = false;
-      zone.classList.add("filled");
-      btn.disabled = false;
-    };
-    input.addEventListener("change", () => setFile(input.files[0]));
-    zone.addEventListener("keydown", (event) => {
-      if (event.target === zone && ["Enter", " "].includes(event.key)) {
-        event.preventDefault();
-        input.click();
-      }
-    });
-    $("#image-clear").addEventListener("click", (event) => { event.preventDefault(); input.click(); });
-    ["dragenter", "dragover"].forEach((type) => zone.addEventListener(type, (event) => {
-      event.preventDefault(); zone.classList.add("over");
-    }));
-    ["dragleave", "drop"].forEach((type) => zone.addEventListener(type, (event) => {
-      event.preventDefault(); zone.classList.remove("over");
-    }));
-    zone.addEventListener("drop", (event) => setFile(event.dataTransfer.files[0]));
-    document.addEventListener("paste", (event) => setFile(event.clipboardData?.files[0]));
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      if (!file || btn.disabled) return;
-      showError("");
-      btn.disabled = true;
-      btn.classList.add("loading");
-      const data = new FormData(form);
-      data.set("image", file);
-      try {
-        const response = await fetch(form.action, { method: "POST", body: data });
-        const json = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(json.error || "La création du motif a échoué.");
-        window.location.href = json.urls.page;
-      } catch (error) {
-        showError(error.message);
-        btn.disabled = false;
-        btn.classList.remove("loading");
-      }
-    });
-  }
-
   // --- Création ---
-  if (page === "create") {
-    const form = $("#create-form");
+  if (page === "create" || page === "cross-stitch") {
+    const form = $("#create-form") || $("#cross-stitch-form");
     const input = $("#image-input");
     const zone = $("#dropzone");
     const range = $("#colors");
@@ -279,13 +213,13 @@
     let analyseId = 0;
     let userTouched = false;
     let sizeTouched = false;
-    const sizeInputs = [$("#width-mm"), $("#height-mm")];
+    const sizeInputs = [$("#width-mm"), $("#height-mm")].filter(Boolean);
     range.addEventListener("input", () => { userTouched = true; });
     sizeInputs.forEach((i) => i.addEventListener("input", () => { sizeTouched = true; }));
 
     const busy = (on) => {
       $("#colors-field").classList.toggle("is-busy", on && !userTouched);
-      $("#size-field").classList.toggle("is-busy", on && !sizeTouched);
+      $("#size-field")?.classList.toggle("is-busy", on && !sizeTouched);
     };
 
     const analyse = async () => {
@@ -305,7 +239,7 @@
         palettes = json.palettes;
         if (!userTouched) range.value = json.colors;
         syncRange();
-        if (!sizeTouched) { sizeInputs[0].value = json.width_mm; sizeInputs[1].value = json.height_mm; }
+        if (!sizeTouched && sizeInputs.length) { sizeInputs[0].value = json.width_mm; sizeInputs[1].value = json.height_mm; }
         const s = json.colors > 1 ? "s" : "";
         const bgNote = bgValue() === "keep" ? "" : " (fond exclu)";
         hint.textContent = `${json.colors} couleur${s} distincte${s} détectée${s}${bgNote}. Chaque couleur correspond à un fil.`;
@@ -321,6 +255,10 @@
       if (!f) return;
       if (!/^image\/(png|jpeg|webp|avif)$/.test(f.type) && !/\.(avif|webp)$/i.test(f.name)) {
         showError("Format non pris en charge : choisissez une image PNG, JPG, WebP ou AVIF.");
+        return;
+      }
+      if (f.size > 20 * 1024 * 1024) {
+        showError("Fichier trop volumineux (20 Mo maximum).");
         return;
       }
       showError("");
@@ -342,6 +280,12 @@
     };
 
     input.addEventListener("change", () => setFile(input.files[0]));
+    zone.addEventListener("keydown", (event) => {
+      if (event.target === zone && ["Enter", " "].includes(event.key)) {
+        event.preventDefault();
+        input.click();
+      }
+    });
     $("#image-clear").addEventListener("click", (e) => { e.preventDefault(); input.click(); });
 
     ["dragenter", "dragover"].forEach((t) => zone.addEventListener(t, (e) => { e.preventDefault(); zone.classList.add("over"); }));
@@ -364,10 +308,12 @@
       data.append("image", file);
       data.append("colors", range.value);
       data.append("background", bgValue());
-      data.append("width_mm", sizeInputs[0].value);
-      data.append("height_mm", sizeInputs[1].value);
       data.append("exclude", JSON.stringify(excluded));
-      data.append("thicken_lines", $("#thicken-lines").checked ? "true" : "false");
+      if (sizeInputs.length) {
+        data.append("width_mm", sizeInputs[0].value);
+        data.append("height_mm", sizeInputs[1].value);
+        data.append("thicken_lines", $("#thicken-lines").checked ? "true" : "false");
+      }
       try {
         const res = await fetch(form.action, { method: "POST", body: data });
         const json = await res.json().catch(() => ({}));
@@ -377,7 +323,7 @@
         showError(ex.message);
         btn.disabled = false;
         btn.classList.remove("loading");
-        $(".btn-label", btn).textContent = "Générer le motif";
+        $(".btn-label", btn).textContent = page === "cross-stitch" ? "Générer le point de croix" : "Générer le motif";
       }
     });
   }

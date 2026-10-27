@@ -46,9 +46,16 @@ Depuis la galerie, « + Nouveau pixel art en point de croix » ouvre un import d
 Un moteur distinct détecte les cases d'une grille régulière et génère une croix de 2 mm
 par case colorée, sans broder les lignes du quadrillage. Les petites images à leur résolution
 native sont également acceptées : un pixel correspond alors à une case.
-La palette et les dimensions sont calculées automatiquement et ne sont pas modifiables.
+Les dimensions restent fixes, à raison de 2 mm par case.
+La création utilise les mêmes contrôles de couleurs que les motifs classiques :
+curseur de 1 à 12, valeur proposée automatiquement, aperçu des palettes et pastilles
+pour supprimer une couleur ou la rétablir. Une couleur supprimée laisse ses cases vides.
+Le nombre choisi est un maximum : le moteur n'ajoute pas de couleurs si l'image en contient moins.
+Les pastilles des fils permettent de changer leurs couleurs ; les fils devenus identiques
+sont regroupés automatiquement. Les modifications régénèrent les aperçus et les exports,
+sans modifier les dimensions des croix.
 Les nuances très proches dues à la compression sont regroupées automatiquement.
-Seule la suppression de l'arrière-plan est configurable, avec les mêmes trois modes que
-la création classique. Les aperçus et les huit formats de téléchargement restent disponibles.
+La suppression de l'arrière-plan conserve les mêmes trois modes que la création classique.
+Les aperçus et les huit formats de téléchargement restent disponibles.
 Limites : 200 cases par côté (400 mm), 40 000 cases, 256 couleurs ; une grille non détectée
 sur une grande image est signalée comme une erreur.

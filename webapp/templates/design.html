@@ -106,7 +106,7 @@
         <div><dt>Coupes</dt><dd>{{ d.stats.trims }}</dd></div>
       </dl>
       <h3>Fils</h3>
-      {% set editable = d.status == 'ready' and d.mode != 'cross_stitch' %}
+      {% set editable = d.status == 'ready' %}
       <ol class="threads" id="threads" data-recolor="{{ url_for('web.api_recolor', design_id=d.id) }}"
           data-merge="{{ url_for('web.api_merge', design_id=d.id) }}">
         {% for c in d.threads %}<li>
@@ -119,7 +119,7 @@
           <code>{{ c }}</code></li>{% endfor %}
       </ol>
       {% if editable %}<p class="hint">Cliquez sur une pastille pour changer la couleur de ce fil dans toute la broderie.</p>{% endif %}
-      {% if editable and d.threads | length != d.threads | unique | list | length %}
+      {% if editable and d.mode != 'cross_stitch' and d.threads | length != d.threads | unique | list | length %}
       <div class="merge-box">
         {% if d.merge_colors %}
         <p>Les fils de même couleur restants ne peuvent pas être regroupés sans changer la superposition des zones.</p>

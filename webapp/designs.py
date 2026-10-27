@@ -22,7 +22,7 @@ from werkzeug.utils import secure_filename
 from img2stitch import (Settings, color_palettes, estimate_colors, image_to_pattern, natural_size_mm,
                         render_photo_preview, render_raw_preview)
 from img2stitch.convert import SIZE_MARGIN_MM, _zone_override, pattern_stats, pattern_to_image
-from img2stitch.cross_stitch import cross_stitch_pattern
+from img2stitch.cross_stitch import MAX_COLORS as CROSS_STITCH_MAX_COLORS, cross_stitch_palettes, cross_stitch_pattern
 from img2stitch.fill import FILL_TYPES
 from img2stitch.photo import FABRICS, stitch_bbox_mm
 
@@ -133,15 +133,49 @@ class DesignStore:
         """Change la couleur d'un fil dans toute la broderie : toutes les zones de ce fil prennent `new`."""
         if new == old:
             return
+        if self.get(design_id).get("mode") == "cross_stitch":
+            self._change_cross_stitch_palette(design_id, recolor=(old, new))
+            return
         self.apply_edits(design_id, [{"color": new if z["color"] == old else z["color"], "fill": z["fill"]}
                                      for z in self.zones(design_id)])
+
+    def set_cross_stitch_colors(self, design_id, n_colors):
+        if n_colors is not None and (isinstance(n_colors, bool) or not isinstance(n_colors, int)
+                                     or not 1 <= n_colors <= CROSS_STITCH_MAX_COLORS):
+            raise InvalidImage("Le nombre de couleurs doit être compris entre 1 et 256.")
+        self._change_cross_stitch_palette(design_id, n_colors=n_colors)
+
+    def _change_cross_stitch_palette(self, design_id, *, n_colors=None, recolor=None):
+        d = self.dir(design_id)
+        with self._modify_lock:
+            meta = self._read(d)
+            if meta.get("mode") != "cross_stitch":
+                raise InvalidImage("Ce réglage est réservé aux motifs en point de croix.")
+            if meta.get("status") != "ready" or meta.get("photo_rendering"):
+                raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
+            previous = {key: meta.get(key) for key in ("cross_stitch_color_limit", "cross_stitch_colors")}
+            if recolor is not None:
+                old, new = recolor
+                colors = dict(meta.get("cross_stitch_colors") or {})
+                sources = meta.get("cross_stitch_source_palette") or [z["source"] for z in meta.get("zones") or []]
+                for source in sources:
+                    if colors.get(source, source) == old:
+                        colors[source] = new
+                meta["cross_stitch_colors"] = colors
+            else:
+                meta.update(cross_stitch_color_limit=n_colors, cross_stitch_colors={})
+            meta.update(cross_stitch_previous=previous, editing=True, zones_previous=meta.get("zones"),
+                        regions_previous=meta.get("regions"), status="processing", error=None, edit_error=None,
+                        step="Mise à jour des couleurs du point de croix")
+            self._write(d, meta)
+        self._pool.submit(self._generate, d)
 
     def merge_colors(self, design_id, enabled=True):
         d = self.dir(design_id)
         with self._modify_lock:
             meta = self._read(d)
             if meta.get("mode") == "cross_stitch":
-                raise InvalidImage("Les couleurs d'un pixel art en point de croix sont fixes.")
+                raise InvalidImage("Les fils identiques du point de croix sont déjà regroupés automatiquement.")
             if meta.get("status") != "ready" or meta.get("photo_rendering"):
                 raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
             # "editing" : en cas d'échec le motif reste utilisable, avec ses zones d'avant
@@ -241,6 +275,8 @@ class DesignStore:
             "step": "Analyse de l'image",
             "error": None,
         }
+        if mode == "cross_stitch":
+            meta.update(cross_stitch_color_limit=n_colors or None, cross_stitch_colors={})
         self._write(d, meta)
         self._pool.submit(self._generate, d)
         return design_id
@@ -253,7 +289,11 @@ class DesignStore:
             if cross_stitch:
                 try:
                     pattern = cross_stitch_pattern(d / SOURCE, meta["background"],
-                                                   source_format=meta.get("source_format"))
+                                                   source_format=meta.get("source_format"),
+                                                   n_colors=meta.get("cross_stitch_color_limit"),
+                                                   exclude=_exclude_setting(meta.get("excluded", [])),
+                                                   color_overrides=[(_rgb(src), _rgb(dst)) for src, dst in
+                                                                    (meta.get("cross_stitch_colors") or {}).items()])
                 except ValueError as exc:
                     raise InvalidImage(str(exc)) from exc
             else:
@@ -275,7 +315,9 @@ class DesignStore:
             if cross_stitch:
                 for zone in zones:
                     zone["fill"] = "cross_stitch"
-                meta.update(n_colors=len(pattern.threadlist), grid=pattern.img2stitch_grid)
+                meta.update(n_colors=len(pattern.threadlist), grid=pattern.img2stitch_grid,
+                            cross_stitch_source_palette=[_hex(rgb) for rgb in pattern.img2stitch_source_palette],
+                            cross_stitch_previous=None)
             frame = {k: float(v) for k, v in pattern.img2stitch_frame.items()}
             self._update(
                 d, meta,
@@ -303,6 +345,7 @@ class DesignStore:
 
     def _fail(self, d, meta, message):
         if meta.get("editing"):  # une retouche qui échoue ne doit pas rendre le motif inutilisable
+            meta.update(meta.pop("cross_stitch_previous", None) or {})
             self._update(d, meta, status="ready", step=None, editing=False, zones=meta.get("zones_previous"),
                          regions=meta.get("regions_previous"), zones_previous=None, regions_previous=None,
                          edit_error=message)
@@ -408,6 +451,17 @@ def parse_exclusions(raw):
 
 def _exclude_setting(excluded):
     return tuple((_rgb(e["color"]), tuple(_rgb(o) for o in e["others"])) for e in excluded)
+
+
+def analyse_cross_stitch_image(stream, background, excluded=()):
+    image = _load_image(stream)
+    try:
+        analysis = cross_stitch_palettes(image, background, source_format=image.info.get("source_format"),
+                                         max_colors=MAX_COLORS, exclude=_exclude_setting(excluded))
+    except ValueError as exc:
+        raise InvalidImage(str(exc)) from exc
+    return {"colors": analysis["colors"],
+            "palettes": {count: [_hex(color) for color in colors] for count, colors in analysis["palettes"].items()}}
 
 
 def analyse_image(stream, background, excluded=()):

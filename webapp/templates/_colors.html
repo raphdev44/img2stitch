@@ -1,0 +1,18 @@
+<div class="field" id="colors-field">
+  <div class="field-head">
+    <label for="colors">Nombre de couleurs</label>
+    <output id="colors-value" class="pill">4</output>
+    <span class="pill pill-busy" aria-hidden="true"><span class="spinner"></span></span>
+  </div>
+  <input type="range" id="colors" name="colors" min="{{ min_colors }}" max="{{ max_colors }}" value="4" step="1">
+  <div class="range-scale"><span>{{ min_colors }}</span><span>{{ max_colors }}</span></div>
+  <div class="palette" id="palette" aria-label="Couleurs retenues" hidden></div>
+  <div class="palette palette-removed" id="palette-removed" hidden></div>
+  <div class="swatch-menu" id="swatch-menu" role="menu" hidden>
+    <button type="button" role="menuitem">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"/></svg>
+      Supprimer cette couleur
+    </button>
+  </div>
+  <p class="hint" id="colors-hint">Chaque couleur correspond à un fil. Le fond n'est pas compté.</p>
+</div>

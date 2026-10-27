@@ -7,10 +7,12 @@ import pyembroidery as pe
 from PIL import Image, ImageOps
 
 from .convert import _center_on_origin
+from .preprocess import _embroidered_pixels
 
 CELL_MM = 2.0
 MAX_CELLS = 40_000
 MAX_SIDE_CELLS = 200
+MAX_COLORS = 256
 
 
 def _grid_lines(rgb, axis):
@@ -106,10 +108,12 @@ def _cell_palette(cells, tolerance=0):
     return palette, labels
 
 
-def cross_stitch_pattern(source, background="outside", *, source_format=None):
-    with Image.open(source) as image:
-        tolerance = 18 if (source_format or image.format) in {"JPEG", "WEBP", "AVIF"} else 0
-        cells = read_cells(image)
+def _prepare_cells(source, background, source_format=None, exclude=()):
+    if not isinstance(source, Image.Image):
+        with Image.open(source) as image:
+            return _prepare_cells(image, background, source_format, exclude)
+    tolerance = 18 if (source_format or source.format) in {"JPEG", "WEBP", "AVIF"} else 0
+    cells = read_cells(source)
     palette, labels = _cell_palette(cells, tolerance)
     if background not in {"outside", "all", "keep"}:
         raise ValueError("Option d'arrière-plan invalide.")
@@ -126,6 +130,54 @@ def cross_stitch_pattern(source, background="outside", *, source_format=None):
                 outside = np.unique(np.concatenate((components[0], components[-1],
                                                     components[:, 0], components[:, -1])))
                 labels[np.isin(components, outside[outside != 0])] = -1
+    if exclude:
+        _, included = _embroidered_pixels(Image.fromarray(cells), cells.shape[1], background="none", exclude=exclude)
+        labels[~included] = -1
+    return cells, palette, labels
+
+
+def _reduce_palette(palette, labels, n_colors):
+    keep = labels >= 0
+    if n_colors is not None and len(np.unique(labels[keep])) > n_colors:
+        rgb = np.array(palette, dtype=np.uint8)[labels[keep]]
+        reduced = Image.fromarray(rgb[None, :, :]).quantize(
+            colors=n_colors, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+        colors, inverse = np.unique(np.array(reduced.convert("RGB"))[0], axis=0, return_inverse=True)
+        palette = [tuple(color.tolist()) for color in colors]
+        labels = labels.copy()
+        labels[keep] = inverse
+    return palette, labels
+
+
+def cross_stitch_palettes(source, background="outside", *, source_format=None, max_colors=12, exclude=()):
+    _, palette, labels = _prepare_cells(source, background, source_format, exclude)
+    count = len(np.unique(labels[labels >= 0]))
+    palettes = {}
+    for limit in range(1, max_colors + 1):
+        colors, reduced = _reduce_palette(palette, labels, limit)
+        palettes[limit] = [rgb for index, rgb in enumerate(colors) if (reduced == index).any()]
+    return {"colors": max(1, min(max_colors, count)), "palettes": palettes}
+
+
+def cross_stitch_pattern(source, background="outside", *, source_format=None, n_colors=None, color_overrides=(),
+                         exclude=()):
+    if n_colors is not None and (isinstance(n_colors, bool) or not isinstance(n_colors, int)
+                                 or not 1 <= n_colors <= MAX_COLORS):
+        raise ValueError("Le nombre de couleurs doit être compris entre 1 et 256.")
+    cells, palette, labels = _prepare_cells(source, background, source_format, exclude)
+    palette, labels = _reduce_palette(palette, labels, n_colors)
+    keep = labels >= 0
+    source_palette = [rgb for index, rgb in enumerate(palette) if (labels == index).any()]
+    overrides = dict(color_overrides)
+    grouped, remap = {}, []
+    for rgb in palette:
+        color = overrides.get(rgb, rgb)
+        if color not in grouped:
+            grouped[color] = len(grouped)
+        remap.append(grouped[color])
+    if keep.any():
+        labels[keep] = np.array(remap)[labels[keep]]
+    palette = list(grouped)
     pattern = pe.EmbPattern()
     zones, segments = [], []
     unit = CELL_MM * 10
@@ -158,6 +210,7 @@ def cross_stitch_pattern(source, background="outside", *, source_format=None):
                                "cx": cx, "cy": cy, "scale": 1.0}
     pattern.img2stitch_zones = zones
     pattern.img2stitch_segments = segments
+    pattern.img2stitch_source_palette = source_palette
     pattern.img2stitch_grid = {"columns": cells.shape[1], "rows": cells.shape[0], "cell_mm": CELL_MM,
                              "crosses": int(np.count_nonzero(labels >= 0))}
     return pattern
