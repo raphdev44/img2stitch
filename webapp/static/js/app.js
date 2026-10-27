@@ -190,6 +190,7 @@
       data.append("width_mm", sizeInputs[0].value);
       data.append("height_mm", sizeInputs[1].value);
       data.append("exclude", JSON.stringify(excluded));
+      data.append("thicken_lines", $("#thicken-lines").checked ? "true" : "false");
       try {
         const res = await fetch(form.action, { method: "POST", body: data });
         const json = await res.json().catch(() => ({}));

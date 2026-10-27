@@ -241,7 +241,8 @@ def color_palettes(src, background="auto", bg_tol=40, bg_scope="all", max_colors
     return out
 
 
-def load_and_quantize(path, width_px, n_colors, background="auto", bg_tol=40, bg_scope="all", exclude=()):
+def load_and_quantize(path, width_px, n_colors, background="auto", bg_tol=40, bg_scope="all", exclude=(),
+                      thicken_lines=False):
     """Retourne (palette, masks) ; palette = liste de (r,g,b), masks = liste de tableaux bool.
     bg_scope : "all" retire tous les pixels de la couleur du fond, "outside" seulement ceux reliés aux bords."""
     rgb, keep = _embroidered_pixels(path, width_px, background, bg_tol, bg_scope, exclude)
@@ -257,13 +258,16 @@ def load_and_quantize(path, width_px, n_colors, background="auto", bg_tol=40, bg
     labels = np.full(keep.shape, 255, np.uint8)
     labels[keep] = group[_nearest(_to_lab(rgb[keep]), centers)]
     # 3) Lissage : supprime les pixels isolés et les franges d'anti-aliasing
-    labels = np.array(Image.fromarray(labels).filter(ImageFilter.ModeFilter(5)))
+    if not thicken_lines:
+        labels = np.array(Image.fromarray(labels).filter(ImageFilter.ModeFilter(5)))
 
     palette, masks = [], []
     for j, rgb_j in enumerate(colors):
         m = labels == j
         if m.any():
             palette.append(rgb_j)
+            if thicken_lines:
+                m = cv2.dilate(m.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool) & keep
             masks.append(m)
     # Clair d'abord : on pose les grandes zones claires avant les détails sombres
     order = sorted(range(len(palette)), key=lambda i: -sum(palette[i]))

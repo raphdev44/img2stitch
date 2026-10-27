@@ -119,7 +119,8 @@ def api_create():
         return jsonify(error=f"La largeur et la hauteur doivent être comprises entre {MIN_SIZE_MM} et {MAX_SIZE_MM} mm."), 400
     try:
         excluded = parse_exclusions(request.form.get("exclude"))
-        design_id = store().create(f.stream, f.filename, n_colors, background, target, excluded)
+        thicken_lines = request.form.get("thicken_lines") == "true"
+        design_id = store().create(f.stream, f.filename, n_colors, background, target, excluded, thicken_lines)
     except InvalidImage as e:
         return jsonify(error=str(e)), 400
     return jsonify(_public(store().get(design_id))), 202

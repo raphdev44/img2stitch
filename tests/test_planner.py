@@ -15,6 +15,18 @@ def _img(tmp_path, draw):
     return str(f)
 
 
+def test_thicken_lines_preserves_and_expands_hairline(tmp_path):
+    from img2stitch.preprocess import load_and_quantize
+
+    path = _img(tmp_path, lambda d: d.line((50, 200, 350, 200), fill="black", width=1))
+    _, default_masks = load_and_quantize(path, 400, 2, background="none")
+    palette, thickened_masks = load_and_quantize(path, 400, 2, background="none", thicken_lines=True)
+
+    assert len(default_masks) == 1
+    dark_index = min(range(len(palette)), key=lambda i: sum(palette[i]))
+    assert thickened_masks[dark_index].sum() >= 900
+
+
 def test_ring_with_covered_hole_needs_at_most_one_jump(tmp_path):
     """Anneau clair dont le trou sera rempli en bleu foncé (piqué après, car on pique du plus clair au plus foncé) :
     le fil de l'anneau traverse le trou à couvert. Un seul saut est inévitable : passer d'une moitié de

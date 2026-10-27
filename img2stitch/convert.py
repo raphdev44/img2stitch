@@ -95,7 +95,7 @@ def _build_pattern(path, s: Settings):
     px_per_mm = 10  # résolution de travail : 10 px par mm
     palette, masks = load_and_quantize(
         path, round(s.width_mm * px_per_mm), s.n_colors, s.background, s.background_tolerance, s.background_scope,
-        s.exclude_colors
+        s.exclude_colors, thicken_lines=s.thicken_lines
     )
     pattern = pe.EmbPattern()
     if not masks:

@@ -212,7 +212,7 @@ class DesignStore:
         return pattern.img2stitch_frame, stitch_bbox_mm(pattern)
 
     # --- Création ---
-    def create(self, stream, filename, n_colors, background, target_mm, excluded=()):
+    def create(self, stream, filename, n_colors, background, target_mm, excluded=(), thicken_lines=False):
         img = _load_image(stream)
         design_id = uuid.uuid4().hex
         d = self.root / design_id
@@ -227,6 +227,7 @@ class DesignStore:
             "background": background,
             "target_mm": list(target_mm),
             "excluded": list(excluded),
+            "thicken_lines": bool(thicken_lines),
             "fabric": DEFAULT_FABRIC,
             "status": "processing",
             "step": "Analyse de l'image",
@@ -420,6 +421,7 @@ def _settings(meta):
     return Settings(n_colors=meta["n_colors"], background=bg, background_scope=scope,
                     max_width_mm=max_w, max_height_mm=max_h,
                     exclude_colors=_exclude_setting(meta.get("excluded", [])),
+                    thicken_lines=bool(meta.get("thicken_lines")),
                     zone_overrides=_zone_setting(meta.get("zones") or []),
                     region_overrides=tuple(((r["u"], r["v"]), _rgb(r["source"]), _rgb(r["color"]), r["fill"])
                                            for r in meta.get("regions") or []),
