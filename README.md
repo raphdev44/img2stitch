@@ -12,6 +12,8 @@ Image (PNG/JPG) -> fichier de broderie machine (.dst, .pes, .jef, .exp, .vp3...)
   Tissu au choix : `--fabric blanc|creme|gris|noir|marine|denim|rouge|#rrggbb`.
 
 `--width` est la largeur de l'IMAGE entière (marges blanches comprises), pas celle du motif brodé.
+Pour imposer la taille du motif brodé lui-même : `--max-width 100 --max-height 80` (en mm) ; le motif est alors
+le plus grand possible tout en tenant strictement dans ce rectangle, proportions conservées.
 
 `--background-scope outside` ne retire que le fond relié aux bords de l'image : les zones de la même couleur
 à l'intérieur du motif sont brodées. Par défaut (`all`), toutes les zones de la couleur du fond sont retirées.

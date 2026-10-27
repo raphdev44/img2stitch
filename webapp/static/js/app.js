@@ -30,12 +30,21 @@
     const defaultHint = hint.textContent;
     let analyseId = 0;
     let userTouched = false;
+    let sizeTouched = false;
+    const sizeInputs = [$("#width-mm"), $("#height-mm")];
     range.addEventListener("input", () => { userTouched = true; });
+    sizeInputs.forEach((i) => i.addEventListener("input", () => { sizeTouched = true; }));
+
+    const busy = (on) => {
+      $("#colors-field").classList.toggle("is-busy", on && !userTouched);
+      $("#size-field").classList.toggle("is-busy", on && !sizeTouched);
+    };
 
     const analyse = async () => {
       if (!file) return;
       const id = ++analyseId;
       hint.textContent = "Analyse des couleurs de l'image…";
+      busy(true);
       const data = new FormData();
       data.append("image", file);
       data.append("background", bgValue());
@@ -45,11 +54,14 @@
         if (id !== analyseId) return;
         if (!res.ok) throw new Error(json.error);
         if (!userTouched) { range.value = json.colors; syncRange(); }
+        if (!sizeTouched) { sizeInputs[0].value = json.width_mm; sizeInputs[1].value = json.height_mm; }
         const s = json.colors > 1 ? "s" : "";
         const bgNote = bgValue() === "keep" ? "" : " (fond exclu)";
         hint.textContent = `${json.colors} couleur${s} distincte${s} détectée${s}${bgNote}. Chaque couleur correspond à un fil.`;
       } catch {
         if (id === analyseId) hint.textContent = defaultHint;
+      } finally {
+        if (id === analyseId) busy(false);
       }
     };
     $$("input[name=background]", form).forEach((r) => r.addEventListener("change", analyse));
@@ -71,6 +83,7 @@
       zone.classList.add("filled");
       btn.disabled = false;
       userTouched = false;
+      sizeTouched = false;
       analyse();
     };
 
@@ -88,6 +101,7 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (!file) return;
+      if (!sizeInputs.every((i) => i.reportValidity())) return;
       showError("");
       btn.disabled = true;
       btn.classList.add("loading");
@@ -96,6 +110,8 @@
       data.append("image", file);
       data.append("colors", range.value);
       data.append("background", bgValue());
+      data.append("width_mm", sizeInputs[0].value);
+      data.append("height_mm", sizeInputs[1].value);
       try {
         const res = await fetch(form.action, { method: "POST", body: data });
         const json = await res.json().catch(() => ({}));

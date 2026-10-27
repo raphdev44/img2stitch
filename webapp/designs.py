@@ -1,6 +1,7 @@
 """Stockage des motifs sur disque et génération en tâche de fond."""
 import json
 import logging
+import math
 import os
 import re
 import threading
@@ -13,8 +14,9 @@ import pyembroidery as pe
 from PIL import Image, ImageOps
 from werkzeug.utils import secure_filename
 
-from img2stitch import Settings, estimate_colors, image_to_pattern, render_photo_preview, render_raw_preview
-from img2stitch.convert import pattern_stats
+from img2stitch import (Settings, estimate_colors, image_to_pattern, natural_size_mm, render_photo_preview,
+                        render_raw_preview)
+from img2stitch.convert import SIZE_MARGIN_MM, pattern_stats
 from img2stitch.photo import stitch_bbox_mm
 
 log = logging.getLogger(__name__)
@@ -32,6 +34,7 @@ FORMATS = {
 SOURCE, RAW, PHOTO, THUMB, META = "source.png", "preview_raw.png", "preview_photo.png", "thumb.jpg", "meta.json"
 PUBLIC_FILES = {SOURCE, RAW, PHOTO, THUMB}
 MIN_COLORS, MAX_COLORS = 1, 12
+MIN_SIZE_MM, MAX_SIZE_MM, DEFAULT_SIZE_MM = 10, 400, 100
 MAX_PIXELS = 40_000_000
 ACCEPTED_FORMATS = {"PNG", "JPEG", "WEBP", "AVIF"}
 # mode web -> (Settings.background, Settings.background_scope)
@@ -90,7 +93,7 @@ class DesignStore:
         return d / f"pattern.{fmt}"
 
     # --- Création ---
-    def create(self, stream, filename, n_colors, background):
+    def create(self, stream, filename, n_colors, background, target_mm):
         img = _load_image(stream)
         design_id = uuid.uuid4().hex
         d = self.root / design_id
@@ -103,6 +106,7 @@ class DesignStore:
             "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "n_colors": n_colors,
             "background": background,
+            "target_mm": list(target_mm),
             "status": "processing",
             "step": "Analyse de l'image",
             "error": None,
@@ -115,7 +119,9 @@ class DesignStore:
         meta = self._read(d)
         try:
             bg, scope = BACKGROUND_MODES[meta["background"]]
-            s = Settings(n_colors=meta["n_colors"], background=bg, background_scope=scope)
+            max_w, max_h = meta["target_mm"]
+            s = Settings(n_colors=meta["n_colors"], background=bg, background_scope=scope,
+                         max_width_mm=max_w, max_height_mm=max_h)
             pattern = image_to_pattern(str(d / SOURCE), s)
             stats = pattern_stats(pattern)
             if stats["stitches"] == 0:
@@ -172,11 +178,17 @@ class DesignStore:
             os.replace(tmp, d / META)
 
 
-def suggest_colors(stream, background):
-    """Nombre de couleurs conseillé pour l'image envoyée, compte tenu de l'option d'arrière-plan."""
+def analyse_image(stream, background):
+    """Valeurs conseillées pour l'image envoyée : nombre de couleurs et taille optimale calculée par le moteur."""
     bg, scope = BACKGROUND_MODES[background]
-    n = estimate_colors(_load_image(stream), background=bg, bg_scope=scope, max_colors=MAX_COLORS)
-    return max(MIN_COLORS, n)
+    img = _load_image(stream)
+    colors = max(MIN_COLORS, estimate_colors(img, background=bg, bg_scope=scope, max_colors=MAX_COLORS))
+    w, h = natural_size_mm(img, Settings(n_colors=colors, background=bg, background_scope=scope))
+    if not w or not h:
+        w = h = DEFAULT_SIZE_MM
+    # Arrondi au 1/10 mm supérieur + marge : garder ces valeurs redonne exactement cette taille
+    fit = lambda v: min(MAX_SIZE_MM, max(MIN_SIZE_MM, math.ceil((v + SIZE_MARGIN_MM) * 10) / 10))
+    return {"colors": colors, "width_mm": fit(w), "height_mm": fit(h)}
 
 
 def _write_atomic(path, write):

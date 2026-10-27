@@ -9,7 +9,9 @@ def main():
     p.add_argument("input")
     p.add_argument("output", help="extension = format : .dst .pes .jef .exp .vp3 ...")
     d = Settings()
-    p.add_argument("--width", type=float, default=d.width_mm, help="largeur en mm")
+    p.add_argument("--width", type=float, default=d.width_mm, help="largeur de l'image en mm")
+    p.add_argument("--max-width", type=float, help="largeur max du motif brodé en mm (prioritaire sur --width)")
+    p.add_argument("--max-height", type=float, help="hauteur max du motif brodé en mm (prioritaire sur --width)")
     p.add_argument("--colors", type=int, default=d.n_colors)
     p.add_argument("--spacing", type=float, default=d.row_spacing_mm, help="écart des rangées en mm")
     p.add_argument("--angle", type=float, default=d.fill_angle_deg)
@@ -25,7 +27,8 @@ def main():
     p.add_argument("--preview", metavar="PREFIXE", help="écrit PREFIXE_brut.png et PREFIXE_photo.png")
     p.add_argument("--fabric", default="creme", help="tissu du rendu photo : blanc creme gris noir marine denim rouge ou #rrggbb")
     a = p.parse_args()
-    s = Settings(width_mm=a.width, n_colors=a.colors, row_spacing_mm=a.spacing, fill_angle_deg=a.angle,
+    s = Settings(width_mm=a.width, max_width_mm=a.max_width, max_height_mm=a.max_height, n_colors=a.colors,
+                 row_spacing_mm=a.spacing, fill_angle_deg=a.angle,
                  background=a.background, background_scope=a.background_scope, overlap_mm=a.overlap, outline=not a.no_outline,
                  trim_threshold_mm=a.trim_threshold, max_visible_travel_mm=a.max_visible_travel,
                  lock_stitches=not a.no_lock)

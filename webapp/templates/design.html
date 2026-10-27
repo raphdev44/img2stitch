@@ -6,7 +6,7 @@
   <div>
     <a href="{{ url_for('web.gallery') }}" class="back">← Galerie</a>
     <h1>{{ d.name }}</h1>
-    <p class="muted">{{ d.created_at | datefr }} · {{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }} demandée{{ 's' if d.n_colors > 1 }} · {{ bg_labels[d.background] }}</p>
+    <p class="muted">{{ d.created_at | datefr }} · {{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }} demandée{{ 's' if d.n_colors > 1 }} · {{ bg_labels[d.background] }}{% if d.target_mm %} · cadre {{ '%g' % d.target_mm[0] }} × {{ '%g' % d.target_mm[1] }} mm{% endif %}</p>
   </div>
   {% if d.status == 'ready' %}<span class="badge ok">Prêt</span>
   {% elif d.status == 'error' %}<span class="badge err">Erreur</span>

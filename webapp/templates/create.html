@@ -23,15 +23,30 @@
   </label>
 
   <div class="options">
-    <div class="field">
+    <div class="field" id="colors-field">
       <div class="field-head">
         <label for="colors">Nombre de couleurs</label>
         <output id="colors-value" class="pill">4</output>
+        <span class="pill pill-busy" aria-hidden="true"><span class="spinner"></span></span>
       </div>
       <input type="range" id="colors" name="colors" min="{{ min_colors }}" max="{{ max_colors }}" value="4" step="1">
       <div class="range-scale"><span>{{ min_colors }}</span><span>{{ max_colors }}</span></div>
       <p class="hint" id="colors-hint">Chaque couleur correspond à un fil. Le fond n'est pas compté.</p>
     </div>
+
+    <fieldset class="field size" id="size-field">
+      <legend>Taille maximale du motif <span class="spinner field-spinner" aria-hidden="true"></span></legend>
+      <div class="size-inputs">
+        <label><span>Largeur</span>
+          <span class="unit"><input type="number" name="width_mm" id="width-mm" min="{{ min_size }}" max="{{ max_size }}" step="0.1" value="{{ default_size }}" required><em>mm</em></span>
+        </label>
+        <span class="times" aria-hidden="true">×</span>
+        <label><span>Hauteur</span>
+          <span class="unit"><input type="number" name="height_mm" id="height-mm" min="{{ min_size }}" max="{{ max_size }}" step="0.1" value="{{ default_size }}" required><em>mm</em></span>
+        </label>
+      </div>
+      <p class="hint">Proposée automatiquement : taille optimale calculée par le moteur pour cette image, modifiable. Le motif brodé sera le plus grand possible tout en tenant entièrement dans ce rectangle.</p>
+    </fieldset>
 
     <fieldset class="field choices">
       <legend>Arrière-plan</legend>

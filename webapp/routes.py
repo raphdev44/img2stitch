@@ -3,7 +3,8 @@ from datetime import datetime
 from flask import Blueprint, abort, current_app, jsonify, render_template, request, send_file, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from .designs import BACKGROUND_MODES, FORMATS, MAX_COLORS, MIN_COLORS, InvalidImage, suggest_colors
+from .designs import (BACKGROUND_MODES, DEFAULT_SIZE_MM, FORMATS, MAX_COLORS, MAX_SIZE_MM, MIN_COLORS, MIN_SIZE_MM,
+                      InvalidImage, analyse_image)
 
 bp = Blueprint("web", __name__)
 
@@ -15,7 +16,7 @@ def store():
 
 
 def _public(meta):
-    out = {k: meta.get(k) for k in ("id", "name", "created_at", "n_colors", "background",
+    out = {k: meta.get(k) for k in ("id", "name", "created_at", "n_colors", "background", "target_mm",
                                      "status", "step", "error", "stats", "threads", "size_mm")}
     out["urls"] = {
         "page": url_for("web.design", design_id=meta["id"]),
@@ -35,7 +36,8 @@ def datefr(value):
 
 @bp.get("/")
 def create():
-    return render_template("create.html", min_colors=MIN_COLORS, max_colors=MAX_COLORS)
+    return render_template("create.html", min_colors=MIN_COLORS, max_colors=MAX_COLORS,
+                           min_size=MIN_SIZE_MM, max_size=MAX_SIZE_MM, default_size=DEFAULT_SIZE_MM)
 
 
 @bp.get("/galerie")
@@ -78,7 +80,13 @@ def api_create():
     if background not in BACKGROUND_MODES:
         return jsonify(error="Option d'arrière-plan invalide."), 400
     try:
-        design_id = store().create(f.stream, f.filename, n_colors, background)
+        target = tuple(float(request.form.get(k, "").replace(",", ".")) for k in ("width_mm", "height_mm"))
+    except ValueError:
+        return jsonify(error="Dimensions invalides."), 400
+    if not all(MIN_SIZE_MM <= v <= MAX_SIZE_MM for v in target):
+        return jsonify(error=f"La largeur et la hauteur doivent être comprises entre {MIN_SIZE_MM} et {MAX_SIZE_MM} mm."), 400
+    try:
+        design_id = store().create(f.stream, f.filename, n_colors, background, target)
     except InvalidImage as e:
         return jsonify(error=str(e)), 400
     return jsonify(_public(store().get(design_id))), 202
@@ -93,7 +101,7 @@ def api_analyse():
     if background not in BACKGROUND_MODES:
         return jsonify(error="Option d'arrière-plan invalide."), 400
     try:
-        return jsonify(colors=suggest_colors(f.stream, background))
+        return jsonify(analyse_image(f.stream, background))
     except InvalidImage as e:
         return jsonify(error=str(e)), 400
 

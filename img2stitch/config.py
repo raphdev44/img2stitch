@@ -5,7 +5,9 @@ from dataclasses import dataclass
 class Settings:
     """Paramètres de conversion. Toutes les longueurs sont en millimètres."""
 
-    width_mm: float = 80.0          # largeur finale du motif
+    width_mm: float = 80.0          # largeur finale de l'IMAGE (ignorée si max_width_mm / max_height_mm est donné)
+    max_width_mm: float = None      # le motif brodé tient strictement dans max_width_mm x max_height_mm,
+    max_height_mm: float = None     # à la plus grande taille possible (l'un des deux peut rester None)
     n_colors: int = 4               # nombre de couleurs de fil, fond exclu
     row_spacing_mm: float = 0.4     # écart entre deux rangées de remplissage (densité)
     max_stitch_mm: float = 3.0      # longueur max d'un point (au-delà, on subdivise)

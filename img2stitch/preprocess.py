@@ -100,27 +100,64 @@ def _embroidered_pixels(src, width_px, background="auto", bg_tol=40, bg_scope="a
 
     keep = arr[..., 3] > 128
     bg_rgb = None
-    if background == "auto":
-        if keep.all():
-            border = np.concatenate([rgb[0], rgb[-1], rgb[:, 0], rgb[:, -1]])
-            bg_rgb = np.median(border, axis=0)
-    elif background not in ("none", None):
+    auto = background == "auto" and keep.all()
+    if auto:
+        # Bande de bord (et pas seulement la 1re ligne) : un fin cadre autour de l'image ne doit pas passer pour le fond
+        band = max(2, round(0.03 * min(rgb.shape[:2])))
+        ring = np.concatenate([rgb[:band].reshape(-1, 3), rgb[-band:].reshape(-1, 3),
+                               rgb[:, :band].reshape(-1, 3), rgb[:, -band:].reshape(-1, 3)])
+        bg_rgb = np.median(ring, axis=0)
+    elif background not in ("auto", "none", None):
         bg_rgb = _parse_hex(background)
     if bg_rgb is not None:
         is_bg = np.linalg.norm(rgb - bg_rgb, axis=-1) <= bg_tol
+        if auto:
+            is_bg |= _frame(is_bg, rgb, bg_tol)
         if bg_scope == "outside":
             is_bg = _touching_border(is_bg)
         keep &= ~is_bg
     return rgb, keep
 
 
+def _frame(is_bg, rgb, tol, max_share=0.02):
+    """Fin cadre (trait continu le long des bords, jusqu'à 2 % de la taille) à traiter comme du fond."""
+    h, w = is_bg.shape
+    limit = max(1, round(max_share * min(h, w)))
+    frame = np.zeros_like(is_bg)
+    sides = (lambda k: (k, slice(None)), lambda k: (h - 1 - k, slice(None)),
+             lambda k: (slice(None), k), lambda k: (slice(None), w - 1 - k))
+    found, max_depth = [], 0
+    for line in sides:
+        depth = 0
+        while depth < limit and is_bg[line(depth)].mean() < 0.1:  # ligne quasi entièrement hors fond
+            depth += 1
+        if 0 < depth < limit and is_bg[line(depth)].mean() > 0.5:  # ... suivie du fond : c'est un cadre
+            found.append(line)
+            max_depth = max(max_depth, depth)
+            for k in range(depth):
+                frame[line(k)] = True
+    # Côtés où le motif touche le cadre : on retire les lignes de la couleur du cadre
+    if found:
+        frame_rgb = np.median(rgb[frame], axis=0)
+        for line in sides:
+            if line in found:
+                continue
+            for k in range(max_depth):
+                if (np.linalg.norm(rgb[line(k)] - frame_rgb, axis=-1) <= tol).mean() < 0.9:
+                    break
+                frame[line(k)] = True
+    return frame
+
+
 def estimate_colors(src, background="auto", bg_tol=40, bg_scope="all", max_colors=12,
-                    min_delta_e=15.0, min_share=0.005, width_px=400):
+                    min_delta_e=15.0, min_share=0.005, width_px=800):
     """Nombre de couleurs réellement distinctes à l'œil dans la zone à broder (fond exclu).
 
     Deux couleurs à moins de `min_delta_e` (CIELAB) sont confondues ; les transitions (flou,
     anti-crénelage) et les zones de moins de `min_share` de la surface sont ignorées."""
-    rgb, keep = _embroidered_pixels(src, width_px, background, bg_tol, bg_scope)
+    img = src if isinstance(src, Image.Image) else Image.open(src)
+    # Jamais d'agrandissement : il élargirait les transitions floues au point d'en faire des aplats
+    rgb, keep = _embroidered_pixels(img, min(width_px, img.width), background, bg_tol, bg_scope)
     if not keep.any():
         return 0
     lab = _to_lab(rgb.reshape(-1, 3)).reshape(rgb.shape)
@@ -133,8 +170,37 @@ def estimate_colors(src, background="auto", bg_tol=40, bg_scope="all", max_color
     pix = rgb[flat]
     if len(pix) > 50000:
         pix = pix[np.random.default_rng(0).choice(len(pix), 50000, replace=False)]
-    _, _, palette = _reduce_colors(pix, 1, min_share=min_share, stop_delta=min_delta_e)
-    return int(np.clip(len(palette), 1, max_colors))
+    centers, group, palette = _reduce_colors(pix, 1, min_share=min_share, stop_delta=min_delta_e)
+    if len(palette) <= 1:
+        return 1
+
+    # Franges : couleur intermédiaire entre deux autres (ou le fond) ET présente seulement en bordure.
+    # Ex. traits noirs fins sur fond blanc : les gris d'anti-crénelage ne sont pas des couleurs du motif.
+    labels = np.full(keep.shape, -1)
+    labels[keep] = group[_nearest(lab[keep], centers)]
+    anchors = [np.array(c, float) for c in palette]
+    if (~keep).any():
+        anchors.append(rgb[~keep].mean(axis=0))
+    kernel = np.ones((3, 3), np.uint8)
+    count = 0
+    for g, c in enumerate(anchors[:len(palette)]):
+        m = (labels == g).astype(np.uint8)
+        core = cv2.erode(m, kernel).sum() / max(1, m.sum())
+        others = [a for k, a in enumerate(anchors) if k != g]
+        if not (core < 0.35 and _is_mixture(c, others)):
+            count += 1
+    return int(np.clip(count, 1, max_colors))
+
+
+def _is_mixture(c, others, tol=25.0):
+    """`c` est-elle (à `tol` près, en RGB) un mélange de deux couleurs de `others` ?"""
+    for i, a in enumerate(others):
+        for b in others[i + 1:]:
+            v = b - a
+            t = float(np.dot(c - a, v) / max(np.dot(v, v), 1e-9))
+            if 0.05 < t < 0.95 and np.linalg.norm(a + t * v - c) < tol:
+                return True
+    return False
 
 
 def load_and_quantize(path, width_px, n_colors, background="auto", bg_tol=40, bg_scope="all"):
