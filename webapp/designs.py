@@ -127,7 +127,7 @@ class DesignStore:
                 pe.write(pattern, str(d / f"pattern.{fmt}"), opts)
 
             x0, y0, x1, y1 = stitch_bbox_mm(pattern)
-            render_raw_preview(pattern, str(d / RAW))
+            _write_atomic(d / RAW, lambda p: render_raw_preview(pattern, p))
             self._update(
                 d, meta,
                 step="Rendu réaliste",
@@ -136,11 +136,11 @@ class DesignStore:
                 size_mm=[round(float(x1 - x0), 1), round(float(y1 - y0), 1)],
             )
 
-            render_photo_preview(pattern, str(d / PHOTO))
+            _write_atomic(d / PHOTO, lambda p: render_photo_preview(pattern, p))
             with Image.open(d / PHOTO) as ph:
                 ph = ph.convert("RGB")
                 ph.thumbnail((640, 640), Image.LANCZOS)
-                ph.save(d / THUMB, "JPEG", quality=86, optimize=True)
+                _write_atomic(d / THUMB, lambda p: ph.save(p, "JPEG", quality=86, optimize=True))
             self._update(d, meta, status="ready", step=None)
         except InvalidImage as e:
             self._update(d, meta, status="error", step=None, error=str(e))
@@ -170,6 +170,13 @@ class DesignStore:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(meta, f, ensure_ascii=False, indent=1)
             os.replace(tmp, d / META)
+
+
+def _write_atomic(path, write):
+    """Écrit via un fichier temporaire puis renomme : le fichier final n'existe jamais à moitié écrit."""
+    tmp = path.with_name(f"{path.stem}.tmp{path.suffix}")
+    write(str(tmp))
+    os.replace(tmp, path)
 
 
 def _load_image(stream):
