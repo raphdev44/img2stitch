@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Créer un motif{% endblock %}
+{% block page %}create{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Transformez une image en <em>broderie machine</em></h1>
+  <p>Déposez un logo ou un dessin, choisissez le nombre de fils : le motif est prêt pour votre brodeuse.</p>
+</section>
+
+<form id="create-form" class="card create-card" action="{{ url_for('web.api_create') }}" novalidate>
+  <label class="dropzone" id="dropzone">
+    <input type="file" name="image" id="image-input" accept="image/png,image/jpeg,image/webp,image/avif,.avif" hidden>
+    <div class="dz-empty">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      <strong>Glissez votre image ici</strong>
+      <span>ou cliquez pour parcourir · PNG, JPG, WebP ou AVIF · 20 Mo max</span>
+    </div>
+    <div class="dz-preview" hidden>
+      <img id="image-preview" alt="Aperçu de l'image">
+      <span class="dz-name" id="image-name"></span>
+      <button type="button" class="btn-ghost small" id="image-clear">Changer d'image</button>
+    </div>
+  </label>
+
+  <div class="options">
+    <div class="field">
+      <div class="field-head">
+        <label for="colors">Nombre de couleurs</label>
+        <output id="colors-value" class="pill">4</output>
+      </div>
+      <input type="range" id="colors" name="colors" min="{{ min_colors }}" max="{{ max_colors }}" value="4" step="1">
+      <div class="range-scale"><span>{{ min_colors }}</span><span>{{ max_colors }}</span></div>
+      <p class="hint">Chaque couleur correspond à un fil. Le fond n'est pas compté.</p>
+    </div>
+
+    <div class="field">
+      <label class="switch">
+        <input type="checkbox" name="remove_background" id="remove-bg" checked>
+        <span class="track"><span class="thumb"></span></span>
+        <span class="switch-label">
+          <strong>Supprimer l'arrière-plan</strong>
+          <small>Le fond détecté sur les bords de l'image ne sera pas brodé.</small>
+        </span>
+      </label>
+    </div>
+
+    <p class="form-error" id="form-error" role="alert" hidden></p>
+
+    <button type="submit" class="btn-primary" id="submit-btn" disabled>
+      <span class="btn-label">Générer le motif</span>
+      <span class="spinner" aria-hidden="true"></span>
+    </button>
+  </div>
+</form>
+{% endblock %}

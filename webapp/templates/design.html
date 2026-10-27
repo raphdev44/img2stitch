@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}{{ d.name }}{% endblock %}
+{% block page %}design{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a href="{{ url_for('web.gallery') }}" class="back">← Galerie</a>
+    <h1>{{ d.name }}</h1>
+    <p class="muted">{{ d.created_at | datefr }} · {{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }} demandée{{ 's' if d.n_colors > 1 }} · fond {{ 'supprimé' if d.remove_background else 'conservé' }}</p>
+  </div>
+  {% if d.status == 'ready' %}<span class="badge ok">Prêt</span>
+  {% elif d.status == 'error' %}<span class="badge err">Erreur</span>
+  {% else %}<span class="badge busy">En cours</span>{% endif %}
+</div>
+
+{% if d.status == 'error' %}
+  <div class="card notice err">
+    <strong>Le motif n'a pas pu être généré.</strong>
+    <p>{{ d.error }}</p>
+    <a class="btn-primary inline" href="{{ url_for('web.create') }}">Essayer une autre image</a>
+  </div>
+{% else %}
+<div class="design-layout" id="design" data-id="{{ d.id }}" data-status="{{ d.status }}"
+     data-has-raw="{{ d.has_raw | int }}" data-has-photo="{{ d.has_photo | int }}"
+     data-api="{{ url_for('web.api_get', design_id=d.id) }}">
+  <section class="card stage-card">
+    <div class="segmented" role="tablist" aria-label="Type d'aperçu">
+      <button role="tab" data-view="photo" {{ 'disabled' if not d.has_photo }}>Réaliste</button>
+      <button role="tab" data-view="raw" {{ 'disabled' if not d.has_raw }}>Simple</button>
+      <button role="tab" data-view="source">Original</button>
+    </div>
+    <div class="stage">
+      {% if d.has_photo %}<img data-view="photo" src="{{ url_for('web.design_file', design_id=d.id, name='preview_photo.png') }}" alt="Rendu réaliste de la broderie">{% endif %}
+      {% if d.has_raw %}<img data-view="raw" src="{{ url_for('web.design_file', design_id=d.id, name='preview_raw.png') }}" alt="Tracé des points">{% endif %}
+      <img data-view="source" src="{{ url_for('web.design_file', design_id=d.id, name='source.png') }}" alt="Image d'origine">
+      {% if d.status == 'processing' %}
+      <div class="stage-progress">
+        <span class="spinner big"></span>
+        <strong id="step">{{ d.step or 'Génération' }}…</strong>
+        <small>{{ 'Le rendu réaliste peut prendre quelques secondes.' if d.has_raw else "Conversion de l'image en points de broderie." }}</small>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <aside class="side">
+    {% if d.stats %}
+    <section class="card">
+      <h2>Caractéristiques</h2>
+      <dl class="stats">
+        <div><dt>Dimensions</dt><dd>{{ d.size_mm[0] }} × {{ d.size_mm[1] }} mm</dd></div>
+        <div><dt>Points</dt><dd>{{ '{:,}'.format(d.stats.stitches).replace(',', ' ') }}</dd></div>
+        <div><dt>Changements de fil</dt><dd>{{ d.stats.color_changes }}</dd></div>
+        <div><dt>Coupes</dt><dd>{{ d.stats.trims }}</dd></div>
+      </dl>
+      <h3>Fils</h3>
+      <ol class="threads">
+        {% for c in d.threads %}<li><span class="swatch" style="--c: {{ c }}"></span><code>{{ c }}</code></li>{% endfor %}
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>Télécharger</h2>
+      <div class="formats">
+        {% for fmt, brand in formats.items() %}
+        <a class="format" href="{{ url_for('web.download', design_id=d.id, fmt=fmt) }}" download>
+          <strong>.{{ fmt }}</strong><small>{{ brand }}</small>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% else %}
+    <section class="card skeleton-card">
+      <div class="sk"></div><div class="sk"></div><div class="sk short"></div>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endif %}
+{% endblock %}

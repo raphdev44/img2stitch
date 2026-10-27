@@ -1,0 +1,19 @@
+[project]
+name = "img2stitch"
+version = "0.1.0"
+description = "Convertit une image PNG/JPG en fichier de broderie machine (DST, PES, JEF...)"
+requires-python = ">=3.9"
+dependencies = ["pyembroidery", "pillow>=11.3", "numpy", "opencv-python-headless"]
+
+[project.optional-dependencies]
+web = ["flask>=3"]
+
+[project.scripts]
+img2stitch = "img2stitch.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["img2stitch*"]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
