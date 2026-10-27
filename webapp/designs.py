@@ -13,7 +13,7 @@ import pyembroidery as pe
 from PIL import Image, ImageOps
 from werkzeug.utils import secure_filename
 
-from img2stitch import Settings, image_to_pattern, render_photo_preview, render_raw_preview
+from img2stitch import Settings, estimate_colors, image_to_pattern, render_photo_preview, render_raw_preview
 from img2stitch.convert import pattern_stats
 from img2stitch.photo import stitch_bbox_mm
 
@@ -170,6 +170,13 @@ class DesignStore:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(meta, f, ensure_ascii=False, indent=1)
             os.replace(tmp, d / META)
+
+
+def suggest_colors(stream, background):
+    """Nombre de couleurs conseillé pour l'image envoyée, compte tenu de l'option d'arrière-plan."""
+    bg, scope = BACKGROUND_MODES[background]
+    n = estimate_colors(_load_image(stream), background=bg, bg_scope=scope, max_colors=MAX_COLORS)
+    return max(MIN_COLORS, n)
 
 
 def _write_atomic(path, write):

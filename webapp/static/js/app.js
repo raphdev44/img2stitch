@@ -23,6 +23,36 @@
     syncRange();
 
     const showError = (msg) => { err.textContent = msg; err.hidden = !msg; };
+    const bgValue = () => $("input[name=background]:checked", form).value;
+
+    // Pré-positionne la jauge selon les couleurs détectées, sauf si l'utilisateur l'a déjà réglée
+    const hint = $("#colors-hint");
+    const defaultHint = hint.textContent;
+    let analyseId = 0;
+    let userTouched = false;
+    range.addEventListener("input", () => { userTouched = true; });
+
+    const analyse = async () => {
+      if (!file) return;
+      const id = ++analyseId;
+      hint.textContent = "Analyse des couleurs de l'image…";
+      const data = new FormData();
+      data.append("image", file);
+      data.append("background", bgValue());
+      try {
+        const res = await fetch(form.dataset.analyse, { method: "POST", body: data });
+        const json = await res.json();
+        if (id !== analyseId) return;
+        if (!res.ok) throw new Error(json.error);
+        if (!userTouched) { range.value = json.colors; syncRange(); }
+        const s = json.colors > 1 ? "s" : "";
+        const bgNote = bgValue() === "keep" ? "" : " (fond exclu)";
+        hint.textContent = `${json.colors} couleur${s} distincte${s} détectée${s}${bgNote}. Chaque couleur correspond à un fil.`;
+      } catch {
+        if (id === analyseId) hint.textContent = defaultHint;
+      }
+    };
+    $$("input[name=background]", form).forEach((r) => r.addEventListener("change", analyse));
 
     const setFile = (f) => {
       if (!f) return;
@@ -40,6 +70,8 @@
       $(".dz-preview", zone).hidden = false;
       zone.classList.add("filled");
       btn.disabled = false;
+      userTouched = false;
+      analyse();
     };
 
     input.addEventListener("change", () => setFile(input.files[0]));
@@ -63,7 +95,7 @@
       const data = new FormData();
       data.append("image", file);
       data.append("colors", range.value);
-      data.append("background", $("input[name=background]:checked", form).value);
+      data.append("background", bgValue());
       try {
         const res = await fetch(form.action, { method: "POST", body: data });
         const json = await res.json().catch(() => ({}));

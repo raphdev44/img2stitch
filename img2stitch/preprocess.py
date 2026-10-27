@@ -24,8 +24,9 @@ def _nearest(points, centers, chunk=200_000):
     return out
 
 
-def _reduce_colors(pix, n_colors, n_fine=48, min_share=0.0005):
+def _reduce_colors(pix, n_colors, n_fine=48, min_share=0.0005, stop_delta=None):
     """Réduit les couleurs en fusionnant toujours les deux groupes les plus proches (distance Lab).
+    Si `stop_delta` est donné, s'arrête dès que toutes les couleurs restantes en sont plus éloignées.
 
     Retourne (centres_fins_lab, groupe_de_chaque_centre_fin, palette_rgb)."""
     lab = _to_lab(pix)
@@ -68,6 +69,8 @@ def _reduce_colors(pix, n_colors, n_fine=48, min_share=0.0005):
         idx = np.flatnonzero(active)
         d = np.linalg.norm(g_lab[idx, None] - g_lab[None, idx], axis=2)
         np.fill_diagonal(d, np.inf)
+        if stop_delta is not None and d.min() >= stop_delta:
+            break
         i, j = np.unravel_index(d.argmin(), d.shape)
         a, b = (idx[i], idx[j]) if n[idx[i]] >= n[idx[j]] else (idx[j], idx[i])
         merge(a, b)
@@ -87,16 +90,14 @@ def _touching_border(mask):
     return np.isin(labels, np.unique(edge[edge_mask]))
 
 
-def load_and_quantize(path, width_px, n_colors, background="auto", bg_tol=40, bg_scope="all"):
-    """Retourne (palette, masks) ; palette = liste de (r,g,b), masks = liste de tableaux bool.
-    bg_scope : "all" retire tous les pixels de la couleur du fond, "outside" seulement ceux reliés aux bords."""
-    img = Image.open(path).convert("RGBA")
+def _embroidered_pixels(src, width_px, background="auto", bg_tol=40, bg_scope="all"):
+    """Image redimensionnée -> (rgb int (H,W,3), masque des pixels à broder). `src` : chemin, fichier ou image PIL."""
+    img = (src if isinstance(src, Image.Image) else Image.open(src)).convert("RGBA")
     h = max(1, round(img.height * width_px / img.width))
     img = img.resize((width_px, h), Image.LANCZOS)
     arr = np.array(img)
     rgb = arr[..., :3].astype(int)
 
-    # 1) Quels pixels sont du fond ?
     keep = arr[..., 3] > 128
     bg_rgb = None
     if background == "auto":
@@ -110,6 +111,36 @@ def load_and_quantize(path, width_px, n_colors, background="auto", bg_tol=40, bg
         if bg_scope == "outside":
             is_bg = _touching_border(is_bg)
         keep &= ~is_bg
+    return rgb, keep
+
+
+def estimate_colors(src, background="auto", bg_tol=40, bg_scope="all", max_colors=12,
+                    min_delta_e=15.0, min_share=0.005, width_px=400):
+    """Nombre de couleurs réellement distinctes à l'œil dans la zone à broder (fond exclu).
+
+    Deux couleurs à moins de `min_delta_e` (CIELAB) sont confondues ; les transitions (flou,
+    anti-crénelage) et les zones de moins de `min_share` de la surface sont ignorées."""
+    rgb, keep = _embroidered_pixels(src, width_px, background, bg_tol, bg_scope)
+    if not keep.any():
+        return 0
+    lab = _to_lab(rgb.reshape(-1, 3)).reshape(rgb.shape)
+    # Écart de couleur par pixel (ΔE/px) : fort sur les bords flous ou anti-crénelés, nul dans les aplats
+    grad = np.sqrt(sum(cv2.Sobel(lab[..., c], cv2.CV_32F, 1, 0) ** 2 + cv2.Sobel(lab[..., c], cv2.CV_32F, 0, 1) ** 2
+                       for c in range(3))) / 8
+    flat = keep & (grad < 4)
+    if flat.sum() < 0.2 * keep.sum():  # image sans aplats (photo, dégradés) : on garde la moitié la plus stable
+        flat = keep & (grad <= np.percentile(grad[keep], 50))
+    pix = rgb[flat]
+    if len(pix) > 50000:
+        pix = pix[np.random.default_rng(0).choice(len(pix), 50000, replace=False)]
+    _, _, palette = _reduce_colors(pix, 1, min_share=min_share, stop_delta=min_delta_e)
+    return int(np.clip(len(palette), 1, max_colors))
+
+
+def load_and_quantize(path, width_px, n_colors, background="auto", bg_tol=40, bg_scope="all"):
+    """Retourne (palette, masks) ; palette = liste de (r,g,b), masks = liste de tableaux bool.
+    bg_scope : "all" retire tous les pixels de la couleur du fond, "outside" seulement ceux reliés aux bords."""
+    rgb, keep = _embroidered_pixels(path, width_px, background, bg_tol, bg_scope)
     if not keep.any():
         return [], []
 

@@ -3,7 +3,7 @@ from datetime import datetime
 from flask import Blueprint, abort, current_app, jsonify, render_template, request, send_file, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from .designs import BACKGROUND_MODES, FORMATS, MAX_COLORS, MIN_COLORS, InvalidImage
+from .designs import BACKGROUND_MODES, FORMATS, MAX_COLORS, MIN_COLORS, InvalidImage, suggest_colors
 
 bp = Blueprint("web", __name__)
 
@@ -82,6 +82,20 @@ def api_create():
     except InvalidImage as e:
         return jsonify(error=str(e)), 400
     return jsonify(_public(store().get(design_id))), 202
+
+
+@bp.post("/api/analyse")
+def api_analyse():
+    f = request.files.get("image")
+    if f is None or not f.filename:
+        return jsonify(error="Aucune image envoyée."), 400
+    background = request.form.get("background", "outside")
+    if background not in BACKGROUND_MODES:
+        return jsonify(error="Option d'arrière-plan invalide."), 400
+    try:
+        return jsonify(colors=suggest_colors(f.stream, background))
+    except InvalidImage as e:
+        return jsonify(error=str(e)), 400
 
 
 @bp.get("/api/motifs/<design_id>")

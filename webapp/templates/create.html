@@ -7,7 +7,7 @@
   <p>Déposez un logo ou un dessin, choisissez le nombre de fils : le motif est prêt pour votre brodeuse.</p>
 </section>
 
-<form id="create-form" class="card create-card" action="{{ url_for('web.api_create') }}" novalidate>
+<form id="create-form" class="card create-card" action="{{ url_for('web.api_create') }}" data-analyse="{{ url_for('web.api_analyse') }}" novalidate>
   <label class="dropzone" id="dropzone">
     <input type="file" name="image" id="image-input" accept="image/png,image/jpeg,image/webp,image/avif,.avif" hidden>
     <div class="dz-empty">
@@ -30,7 +30,7 @@
       </div>
       <input type="range" id="colors" name="colors" min="{{ min_colors }}" max="{{ max_colors }}" value="4" step="1">
       <div class="range-scale"><span>{{ min_colors }}</span><span>{{ max_colors }}</span></div>
-      <p class="hint">Chaque couleur correspond à un fil. Le fond n'est pas compté.</p>
+      <p class="hint" id="colors-hint">Chaque couleur correspond à un fil. Le fond n'est pas compté.</p>
     </div>
 
     <fieldset class="field choices">
