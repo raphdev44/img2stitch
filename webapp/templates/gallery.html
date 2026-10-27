@@ -22,18 +22,26 @@
   {% elif d.has_photo %}{% set img = 'preview_photo.png' %}
   {% elif d.has_raw %}{% set img = 'preview_raw.png' %}
   {% else %}{% set img = 'source.png' %}{% endif %}
-  <a class="tile" href="{{ url_for('web.design', design_id=d.id) }}">
-    <div class="tile-img {{ 'pending' if img == 'source.png' or img == 'preview_raw.png' }}">
-      <img loading="lazy" src="{{ url_for('web.design_file', design_id=d.id, name=img, v=d.photo_version) }}" alt="{{ d.name }}">
-      {% if d.status == 'processing' %}<span class="badge busy">En cours</span>
-      {% elif d.status == 'error' %}<span class="badge err">Erreur</span>{% endif %}
-    </div>
-    <div class="tile-body">
-      <strong>{{ d.name }}</strong>
-      <small>{{ d.created_at | datefr }}</small>
-      {% if d.threads %}<div class="mini-swatches">{% for c in d.threads %}<span style="--c: {{ c }}"></span>{% endfor %}</div>{% endif %}
-    </div>
-  </a>
+  <div class="tile-card">
+    <a class="tile" href="{{ url_for('web.design', design_id=d.id) }}">
+      <div class="tile-img {{ 'pending' if img == 'source.png' or img == 'preview_raw.png' }}">
+        <img loading="lazy" src="{{ url_for('web.design_file', design_id=d.id, name=img, v=d.photo_version) }}" alt="{{ d.name }}">
+        {% if d.status == 'processing' %}<span class="badge busy">En cours</span>
+        {% elif d.status == 'error' %}<span class="badge err">Erreur</span>{% endif %}
+      </div>
+      <div class="tile-body">
+        <strong>{{ d.name }}</strong>
+        <small>{{ d.created_at | datefr }}</small>
+        {% if d.threads %}<div class="mini-swatches">{% for c in d.threads %}<span style="--c: {{ c }}"></span>{% endfor %}</div>{% endif %}
+      </div>
+    </a>
+    <form class="tile-delete" action="{{ url_for('web.api_delete', design_id=d.id) }}" method="post" data-name="{{ d.name }}">
+      <button type="submit" aria-label="Supprimer {{ d.name }}" title="Supprimer ce motif"
+              {% if d.status == 'processing' or d.photo_rendering %}disabled{% endif %}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 10v6m4-6v6"/></svg>
+      </button>
+    </form>
+  </div>
   {% endfor %}
 </div>
 {% endif %}

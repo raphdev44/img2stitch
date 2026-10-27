@@ -56,6 +56,16 @@ def gallery():
     return render_template("gallery.html", designs=store().list())
 
 
+@bp.post("/api/motifs/<design_id>/supprimer")
+def api_delete(design_id):
+    try:
+        if not store().delete(design_id):
+            abort(404)
+    except InvalidImage as e:
+        return jsonify(error=str(e)), 409
+    return "", 204
+
+
 @bp.get("/motifs/<design_id>")
 def design(design_id):
     meta = store().get(design_id) or abort(404)

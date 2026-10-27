@@ -358,6 +358,23 @@
   if (page === "gallery" && $(".tile .badge.busy")) {
     setTimeout(() => window.location.reload(), 4000);
   }
+  if (page === "gallery") {
+    $$(".tile-delete").forEach((form) => form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!window.confirm(`Supprimer définitivement « ${form.dataset.name} » ?`)) return;
+      const button = $("button", form);
+      button.disabled = true;
+      try {
+        const res = await fetch(form.action, { method: "POST" });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.error || "La suppression n'a pas pu être effectuée.");
+        window.location.reload();
+      } catch (ex) {
+        window.alert(ex.message);
+        button.disabled = false;
+      }
+    }));
+  }
 
   // --- Édition d'un motif : clic sur une zone -> couleur / motif de remplissage ---
   if (page === "edit") {

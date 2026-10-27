@@ -4,6 +4,7 @@ import logging
 import math
 import os
 import re
+import shutil
 import threading
 import time
 import unicodedata
@@ -104,6 +105,17 @@ class DesignStore:
         if d is None or fmt not in FORMATS or not (d / f"pattern.{fmt}").is_file():
             return None
         return d / f"pattern.{fmt}"
+
+    def delete(self, design_id):
+        with self._modify_lock:
+            d = self.dir(design_id)
+            if d is None:
+                return False
+            meta = self._read(d)
+            if meta.get("status") == "processing" or meta.get("photo_rendering"):
+                raise InvalidImage("Impossible de supprimer un motif pendant son traitement.")
+            shutil.rmtree(d)
+            return True
 
     # --- Nom du motif ---
     def rename(self, design_id, name):
