@@ -7,17 +7,17 @@ import pyembroidery as pe
 from PIL import Image, ImageOps
 
 from .convert import _center_on_origin
-from .preprocess import _nearest, _to_lab
+from .preprocess import _nearest, _reduce_colors, _to_lab
 
 CELL_MM = 2.0
 MAX_CELLS = 40_000
 MAX_SIDE_CELLS = 200
 MAX_COLORS = 256
+MAX_SOURCE_COLORS = 20
 
 
 def _grid_lines(rgb, axis):
-    neutral = np.ptp(rgb.astype(np.int16), axis=2) < 35
-    ink = np.where(neutral, 255 - rgb.mean(axis=2), 0).mean(axis=axis)
+    ink = (255 - rgb.astype(np.float32).mean(axis=2)).mean(axis=axis)
     ink = cv2.morphologyEx(ink.astype(np.float32)[None, :], cv2.MORPH_TOPHAT,
                            np.ones((1, 7), np.uint8))[0]
     low, high = np.percentile(ink, [20, 98])
@@ -128,6 +128,18 @@ def read_cells(source):
     return cells
 
 
+def _limit_cell_colors(cells):
+    visible = cells[:, :, 3] >= 128
+    colors = cells[:, :, :3][visible]
+    if len(np.unique(colors, axis=0)) <= MAX_SOURCE_COLORS:
+        return cells
+    centers, groups, palette = _reduce_colors(colors, MAX_SOURCE_COLORS, min_share=0)
+    reduced = np.asarray(palette, dtype=np.uint8)[groups[_nearest(_to_lab(colors), centers)]]
+    cells = cells.copy()
+    cells[visible, :3] = reduced
+    return cells
+
+
 def _cell_palette(cells, tolerance=0):
     visible = cells[:, :, 3] >= 128
     colors = Counter(map(tuple, cells[:, :, :3][visible].tolist()))
@@ -139,8 +151,6 @@ def _cell_palette(cells, tolerance=0):
         if match is None:
             match = len(palette)
             palette.append(color)
-            if len(palette) > 256:
-                raise ValueError("Cette image contient trop de nuances pour un pixel art (256 couleurs maximum).")
         mapping[color] = match
     labels = np.full(visible.shape, -1, dtype=np.int32)
     for row, col in zip(*np.nonzero(visible)):
@@ -153,7 +163,7 @@ def _prepare_cells(source, background, source_format=None, exclude=()):
         with Image.open(source) as image:
             return _prepare_cells(image, background, source_format, exclude)
     tolerance = 18 if (source_format or source.format) in {"JPEG", "WEBP", "AVIF"} else 0
-    cells = read_cells(source)
+    cells = _limit_cell_colors(read_cells(source))
     palette, labels = _cell_palette(cells, tolerance)
     if background not in {"outside", "all", "keep"}:
         raise ValueError("Option d'arrière-plan invalide.")

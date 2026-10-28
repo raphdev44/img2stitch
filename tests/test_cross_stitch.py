@@ -6,7 +6,8 @@ import pyembroidery as pe
 import pytest
 from PIL import Image, ImageDraw
 
-from img2stitch.cross_stitch import _grid_lines, _prepare_cells, cross_stitch_palettes, cross_stitch_pattern, read_cells
+from img2stitch.cross_stitch import (_grid_lines, _limit_cell_colors, _prepare_cells, cross_stitch_palettes,
+                                    cross_stitch_pattern, read_cells)
 from webapp import create_app
 
 
@@ -132,6 +133,19 @@ def test_grid_reconstructs_lines_hidden_by_dark_regions():
     pixels[:, 100:221] = 25
     pixels[:, 73] = 30
     result = _grid_lines(pixels, 0)
+    assert result is not None
+    lines, pitch = result
+    assert pitch == pytest.approx(20)
+    assert lines == pytest.approx(np.arange(0, 321, 20))
+
+
+def test_grid_detects_lines_over_colored_pixels():
+    pixels = np.full((321, 321, 3), (80, 160, 220), dtype=np.uint8)
+    pixels[:, ::20] = (pixels[:, ::20].astype(float) * 0.9).astype(np.uint8)
+    pixels[::20, :] = (pixels[::20, :].astype(float) * 0.9).astype(np.uint8)
+
+    result = _grid_lines(pixels, 0)
+
     assert result is not None
     lines, pitch = result
     assert pitch == pytest.approx(20)
@@ -279,8 +293,26 @@ def test_oversized_and_non_pixel_art_images_are_rejected():
     pixels = np.arange(300, dtype=np.uint32)
     rgb = np.stack((pixels % 256, pixels // 256, pixels * 0), axis=-1).astype(np.uint8)
     image = Image.fromarray(rgb.reshape(15, 20, 3))
-    with pytest.raises(ValueError, match="trop de nuances"):
-        cross_stitch_pattern(_source(image), "keep")
+    pattern = cross_stitch_pattern(_source(image), "keep")
+    assert len(pattern.img2stitch_source_palette) <= 20
+    assert len(pattern.threadlist) <= 20
+    assert pattern.img2stitch_grid["crosses"] == 300
+
+
+def test_color_reduction_merges_nearest_shades_first():
+    anchors = [
+        (135, 7, 80), (42, 253, 169), (26, 4, 162), (125, 145, 138), (208, 187, 75),
+        (43, 57, 93), (235, 27, 49), (237, 142, 167), (68, 188, 213), (186, 12, 247),
+        (138, 5, 201), (35, 214, 16), (90, 157, 116), (143, 212, 208), (203, 27, 96),
+        (108, 232, 15), (128, 122, 56), (213, 134, 95), (201, 173, 242),
+    ]
+    colors = [(130, 110, 94), (130, 111, 94), *anchors]
+    cells = np.array([[(*color, 255) for color in colors]], dtype=np.uint8)
+
+    reduced = _limit_cell_colors(cells)
+
+    assert tuple(reduced[0, 0, :3]) == tuple(reduced[0, 1, :3])
+    assert len(np.unique(reduced[0, :, :3], axis=0)) == 20
 
 
 def test_lossy_upload_preserves_original_format(tmp_path):

@@ -235,7 +235,8 @@
         const res = await fetch(form.dataset.analyse, { method: "POST", body: data });
         const json = await res.json();
         if (id !== analyseId) return;
-        if (!res.ok) throw new Error(json.error);
+        if (!res.ok) throw new Error(json.error || "Impossible d'analyser cette image.");
+        showError("");
         palettes = json.palettes;
         if (!userTouched) range.value = json.colors;
         syncRange();
@@ -243,8 +244,11 @@
         const s = json.colors > 1 ? "s" : "";
         const bgNote = bgValue() === "keep" ? "" : " (fond exclu)";
         hint.textContent = `${json.colors} couleur${s} distincte${s} détectée${s}${bgNote}. Chaque couleur correspond à un fil.`;
-      } catch {
-        if (id === analyseId) hint.textContent = defaultHint;
+      } catch (ex) {
+        if (id === analyseId) {
+          hint.textContent = defaultHint;
+          showError(ex.message || "Impossible d'analyser cette image.");
+        }
       } finally {
         if (id === analyseId) busy(false);
       }
