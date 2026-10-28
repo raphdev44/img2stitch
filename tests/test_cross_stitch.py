@@ -401,7 +401,7 @@ def test_cross_stitch_palette_api(tmp_path, monkeypatch):
         assert len(saved.threadlist) == 2
         data = json.loads((store.dir(design_id) / "pattern.json").read_text(encoding="utf-8"))
         assert set(data["threads"]) == {0xA000F0, 0xFFFF00}
-        assert client.post(f"/api/motifs/{design_id}/tissu", json={"fabric": "blanc"}).status_code == 202
+        assert client.post(f"/api/motifs/{design_id}/tissu", json={"fabric": "emeraude"}).status_code == 202
         assert set(store.get(design_id)["threads"]) == {"#a000f0", "#ffff00"}
         assert client.post(f"/api/motifs/{design_id}/couleurs", json={"colors": None}).status_code == 202
         assert store.get(design_id)["n_colors"] == 3

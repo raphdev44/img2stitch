@@ -12,7 +12,7 @@ bp = Blueprint("web", __name__)
 
 BG_LABELS = {"outside": "fond extérieur supprimé", "all": "fond et zones identiques supprimés", "keep": "fond conservé"}
 FABRIC_LABELS = {"blanc": "Blanc", "creme": "Crème", "gris": "Gris", "noir": "Noir", "marine": "Marine",
-                 "denim": "Denim", "rouge": "Rouge"}
+                 "denim": "Denim", "rouge": "Rouge", "emeraude": "Vert émeraude"}
 
 
 def store():

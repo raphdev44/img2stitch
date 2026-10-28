@@ -12,6 +12,7 @@ import pyembroidery as pe
 FABRICS = {
     "blanc": "#f1eee6", "creme": "#e6dcc4", "gris": "#8d8f92",
     "noir": "#1c1c1e", "marine": "#22304f", "denim": "#46628a", "rouge": "#8c2a2a",
+    "emeraude": "#075e47",
 }
 _LIGHT = np.array([-0.45, -0.55, 0.70], np.float32)
 _LIGHT /= np.linalg.norm(_LIGHT)
