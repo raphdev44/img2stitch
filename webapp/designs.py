@@ -24,6 +24,7 @@ from img2stitch import (Settings, color_palettes, estimate_colors, image_to_patt
 from img2stitch.convert import SIZE_MARGIN_MM, _zone_override, pattern_stats, pattern_to_image
 from img2stitch.cross_stitch import MAX_COLORS as CROSS_STITCH_MAX_COLORS, cross_stitch_palettes, cross_stitch_pattern
 from img2stitch.fill import FILL_TYPES
+from img2stitch.relief import LEGACY as RELIEF_LEGACY
 from img2stitch.photo import FABRICS, stitch_bbox_mm
 
 log = logging.getLogger(__name__)
@@ -136,8 +137,8 @@ class DesignStore:
         if self.get(design_id).get("mode") == "cross_stitch":
             self._change_cross_stitch_palette(design_id, recolor=(old, new))
             return
-        self.apply_edits(design_id, [{"color": new if z["color"] == old else z["color"], "fill": z["fill"]}
-                                     for z in self.zones(design_id)])
+        self.apply_edits(design_id, [{"color": new if z["color"] == old else z["color"], "fill": z["fill"],
+                                      "outline": z["outline"]} for z in self.zones(design_id)])
 
     def set_cross_stitch_colors(self, design_id, n_colors):
         if n_colors is not None and (isinstance(n_colors, bool) or not isinstance(n_colors, int)
@@ -187,12 +188,15 @@ class DesignStore:
 
     # --- Édition des zones ---
     def zones(self, design_id):
-        """Blocs de couleur du motif, dans l'ordre de piqué : [{"source", "color", "fill", "region"}, ...].
-        "region" est l'index de la retouche de zone fermée (meta["regions"]) qui a créé le bloc, sinon None."""
+        """Blocs de couleur du motif, dans l'ordre de piqué :
+        [{"source", "color", "fill", "outline", "region"}, ...].
+        "outline" : point de contour activé pour la zone ; "region" est l'index de la retouche de
+        zone fermée (meta["regions"]) qui a créé le bloc, sinon None."""
         meta = self.get(design_id)
         if meta.get("zones"):
-            return [dict(z, region=z.get("region")) for z in meta["zones"]]
-        return [{"source": c, "color": c, "fill": "tatami", "region": None} for c in meta.get("threads") or []]
+            return [dict(z, region=z.get("region"), outline=z.get("outline", True)) for z in meta["zones"]]
+        return [{"source": c, "color": c, "fill": "tatami", "outline": True, "region": None}
+                for c in meta.get("threads") or []]
 
     def zone_map_path(self, design_id):
         d = self.dir(design_id)
@@ -212,12 +216,14 @@ class DesignStore:
         meta = self.get(design_id)
         if meta.get("mode") == "cross_stitch":
             raise InvalidImage("Un pixel art en point de croix ne peut pas être modifié dans cet éditeur.")
-        regions = [dict(r) for r in meta.get("regions") or []]
+        regions = [dict(r, outline=r.get("outline", True)) for r in meta.get("regions") or []]
         zones = []
         for z, e in zip(current, edits):
+            outline = e.get("outline", z.get("outline", True))
             if z["region"] is not None and z["region"] < len(regions):
-                regions[z["region"]].update(color=e["color"], fill=e["fill"])
-            zones.append({"source": z["source"], "color": e["color"], "fill": e["fill"], "region": z["region"]})
+                regions[z["region"]].update(color=e["color"], fill=e["fill"], outline=outline)
+            zones.append({"source": z["source"], "color": e["color"], "fill": e["fill"],
+                          "outline": outline, "region": z["region"]})
         new_regions = [r for r in new_regions if current[r["block"]]["region"] is None]
         if new_regions:
             frame, (x0, y0, x1, y1) = self._frame_and_bbox(d, meta)
@@ -227,11 +233,12 @@ class DesignStore:
                 y = (y0 - 6 + r["fy"] * (y1 - y0 + 12)) * 10
                 u, v = pattern_to_image(frame, x, y)
                 regions.append({"source": current[r["block"]]["source"], "u": float(u), "v": float(v),
-                                "color": r["color"], "fill": r["fill"]})
+                                "color": r["color"], "fill": r["fill"], "outline": r.get("outline", True)})
         # Une zone revenue aux réglages de sa couleur n'a plus besoin d'être isolée
         whole = {z["source"]: z for z in zones if z["region"] is None}
         regions = [r for r in regions if not (r["source"] in whole and whole[r["source"]]["color"] == r["color"]
-                                              and whole[r["source"]]["fill"] == r["fill"])]
+                                              and whole[r["source"]]["fill"] == r["fill"]
+                                              and whole[r["source"]].get("outline", True) == r.get("outline", True))]
         with self._modify_lock:
             meta = self._read(d)
             if meta.get("status") != "ready" or meta.get("photo_rendering"):
@@ -300,6 +307,10 @@ class DesignStore:
                 pattern = image_to_pattern(str(d / SOURCE), s)
             stats = pattern_stats(pattern)
             if stats["stitches"] == 0:
+                off = [z for z in meta.get("zones") or [] if z["fill"] == "none" and not z.get("outline", True)]
+                if off and len(off) == len(meta["zones"]):
+                    raise InvalidImage("Toutes les zones sont éteintes : rallumez au moins un remplissage "
+                                       "ou un point de contour.")
                 raise InvalidImage("Aucun point à broder : l'image semble vide une fois le fond supprimé.")
 
             self._update(d, meta, step="Écriture des fichiers de broderie")
@@ -492,20 +503,29 @@ def _rgb(h):
 def _settings(meta):
     bg, scope = BACKGROUND_MODES[meta["background"]]
     max_w, max_h = meta.get("target_mm") or (None, None)  # motifs antérieurs au cadre en mm
+    # Une régénération repart du même cadre que la génération précédente : sans ça, éteindre le
+    # remplissage d'une zone réduirait la surface piquée, et l'ajustement au cadre agrandirait
+    # tout le reste (le motif changerait d'échelle à chaque retouche).
+    frame_w = (meta.get("frame") or {}).get("w")
+    frame_ppm = (meta.get("frame") or {}).get("ppm")
+    same_frame = {"width_mm": frame_w / frame_ppm} if frame_w and frame_ppm else {}
+    if same_frame:
+        max_w = max_h = None
     return Settings(n_colors=meta["n_colors"], background=bg, background_scope=scope,
-                    max_width_mm=max_w, max_height_mm=max_h,
+                    max_width_mm=max_w, max_height_mm=max_h, **same_frame,
                     exclude_colors=_exclude_setting(meta.get("excluded", [])),
                     thicken_lines=bool(meta.get("thicken_lines")),
                     zone_overrides=_zone_setting(meta.get("zones") or []),
-                    region_overrides=tuple(((r["u"], r["v"]), _rgb(r["source"]), _rgb(r["color"]), r["fill"])
-                                           for r in meta.get("regions") or []),
+                    region_overrides=tuple(((r["u"], r["v"]), _rgb(r["source"]), _rgb(r["color"]), r["fill"],
+                                            r.get("outline", True)) for r in meta.get("regions") or []),
                     merge_same_colors=bool(meta.get("merge_colors")))
 
 
 def _zone_setting(zones):
     """Blocs de meta.json -> Settings.zone_overrides (couleurs entières qui diffèrent du défaut)."""
-    return tuple((_rgb(z["source"]), _rgb(z["color"]), z["fill"]) for z in zones
-                 if z.get("region") is None and (z["color"] != z["source"] or z["fill"] != "tatami"))
+    return tuple((_rgb(z["source"]), _rgb(z["color"]), z["fill"], z.get("outline", True)) for z in zones
+                 if z.get("region") is None and (z["color"] != z["source"] or z["fill"] != "tatami"
+                                                 or z.get("outline", True) is False))
 
 
 def _zones_of(pattern, s, regions):
@@ -515,11 +535,13 @@ def _zones_of(pattern, s, regions):
     out = []
     for src, ri in getattr(pattern, "img2stitch_zones", []):
         if ri is None:
-            color, kind = _zone_override(src, s.zone_overrides)
-            out.append({"source": _hex(src), "color": _hex(color), "fill": kind, "region": None})
+            color, kind, outline = _zone_override(src, s.zone_overrides)
+            out.append({"source": _hex(src), "color": _hex(color), "fill": kind,
+                        "outline": True if outline is None else outline, "region": None})
         else:
             r = regions[ri]
-            out.append({"source": _hex(src), "color": r["color"], "fill": r["fill"], "region": new_index[ri]})
+            out.append({"source": _hex(src), "color": r["color"], "fill": r["fill"],
+                        "outline": r.get("outline", True), "region": new_index[ri]})
     return out, [regions[ri] for ri in used]
 
 
@@ -527,17 +549,20 @@ def parse_edits(payload, n_zones):
     """Retouches envoyées par l'éditeur -> (blocs [{"color", "fill"}], zones fermées [{"block", "fx", "fy", "color", "fill"}])."""
     payload = payload if isinstance(payload, dict) else {}
     items, regions = payload.get("zones"), payload.get("regions") or []
+    # RELIEF_LEGACY : noms d'avant la refonte des reliefs, encore présents dans les projets
+    # existants ; relief.zone_fill les traduit vers le motif équivalent.
     valid = lambda it: (isinstance(it, dict) and isinstance(it.get("color"), str) and _HEX_RE.match(it["color"])
-                        and it.get("fill") in FILL_TYPES)
+                        and (it.get("fill") in FILL_TYPES or it.get("fill") in RELIEF_LEGACY)
+                        and isinstance(it.get("outline", True), bool))
     ok = (isinstance(items, list) and len(items) == n_zones and all(valid(it) for it in items)
           and isinstance(regions, list) and len(regions) <= 200 and all(
               valid(r) and isinstance(r.get("block"), int) and 0 <= r["block"] < n_zones
               and all(isinstance(r.get(k), (int, float)) and 0 <= r[k] <= 1 for k in ("fx", "fy")) for r in regions))
     if not ok:
         raise InvalidImage("Modifications invalides.")
-    return ([{"color": it["color"].lower(), "fill": it["fill"]} for it in items],
+    return ([{"color": it["color"].lower(), "fill": it["fill"], "outline": it.get("outline", True)} for it in items],
             [{"block": r["block"], "fx": float(r["fx"]), "fy": float(r["fy"]), "color": r["color"].lower(),
-              "fill": r["fill"]} for r in regions])
+              "fill": r["fill"], "outline": r.get("outline", True)} for r in regions])
 
 
 def _render_zone_map(pattern, path, ppm=5, margin_mm=6):

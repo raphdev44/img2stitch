@@ -508,8 +508,9 @@
   if (page === "edit") {
     const root = $("#editor");
     const { zones, fills: fillList } = JSON.parse($("#editor-data").textContent);
+    zones.forEach((z) => { z.outline = z.outline !== false; });  // projets antérieurs : contour actif
     const fills = Object.fromEntries(fillList);
-    const edits = zones.map((z) => ({ color: z.color, fill: z.fill }));
+    const edits = zones.map((z) => ({ color: z.color, fill: z.fill, outline: z.outline }));
     const img = $("#editor-img");
     const overlay = $("#editor-overlay");
     const list = $("#zone-list");
@@ -528,27 +529,37 @@
 
     // Aperçus des motifs de remplissage (SVG statiques)
     const FILL_ICONS = {
-      tatami: '<path d="M2 14 14 2M2 22 22 2M10 22l12-12M2 6l4-4M18 22l4-4"/>',
-      tatami_h: '<path d="M3 5h18M3 9h18M3 13h18M3 17h18M3 21h18"/>',
-      tatami_v: '<path d="M5 3v18M9 3v18M13 3v18M17 3v18M21 3v18"/>',
-      cross: '<path d="M2 14 14 2M2 22 22 2M10 22l12-12M2 10 14 22M2 2l20 20M10 2l12 12"/>',
-      satin: '<path d="M4 3v18M6 3v18M8 3v18M10 3v18M12 3v18M14 3v18M16 3v18M18 3v18M20 3v18"/>',
-      satin_flow: '<path d="M4 20q2-14 16-16" stroke-width="5" stroke-opacity=".25"/><path d="m3 18 3 3M4 14l5 4M6 10l5 5M9 7l5 4M13 4l4 5M17 3l3 4"/>',
-      contour: '<rect x="3" y="3" width="18" height="18" rx="3"/><rect x="7" y="7" width="10" height="10" rx="2"/><rect x="11" y="11" width="2" height="2"/>',
-      wave: '<path d="M2 6q2.5-3 5 0t5 0 5 0 5 0M2 12q2.5-3 5 0t5 0 5 0 5 0M2 18q2.5-3 5 0t5 0 5 0 5 0"/>',
-      zigzag: '<path d="m2 7 3-3 3 3 3-3 3 3 3-3 3 3 3-3M2 13l3-3 3 3 3-3 3 3 3-3 3 3 3-3M2 19l3-3 3 3 3-3 3 3 3-3 3 3 3-3"/>',
-      none: '<rect x="3" y="3" width="18" height="18" rx="3" stroke-dasharray="3 2.5"/>',
-      relief_stripes: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v18M12 3v18M16 3v18" stroke-dasharray="1 1.6"/>',
-      relief_chevron: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m6 3 3 4.5L6 12l3 4.5L6 21M12 3l3 4.5-3 4.5 3 4.5-3 4.5" stroke-dasharray="1 1.6"/>',
-      relief_waves: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3q3 4.5 0 9t0 9M14 3q3 4.5 0 9t0 9" stroke-dasharray="1 1.6"/>',
-      relief_bricks: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v6M15 3v6M6 9v6M12 9v6M18 9v6M9 15v6M15 15v6" stroke-dasharray="1 1.6"/>',
-      relief_diamonds: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m3 9 6-6 12 12M3 15 15 3l6 6M9 21l12-12M3 9l12 12" stroke-dasharray="1 1.6"/>',
-      relief_circles: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="3" stroke-dasharray="1 1.6"/><circle cx="16" cy="8" r="3" stroke-dasharray="1 1.6"/><circle cx="12" cy="15" r="3" stroke-dasharray="1 1.6"/>',
-      relief_scales: '<rect x="2" y="2" width="20" height="20" rx="2"/><path d="M2 5q4 8 8 0t8 0M-2 10q4 8 8 0t8 0t8 0M2 15q4 8 8 0t8 0" stroke-dasharray="1 1.4"/>',
+      tatami: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M-30 24 L-6 0 M-24 24 L0 0 M-18 24 L6 0 M-12 24 L12 0 M-6 24 L18 0 M0 24 L24 0 M6 24 L30 0 M12 24 L36 0 M18 24 L42 0 M24 24 L48 0" stroke-dasharray="2.6 2.2" stroke-linejoin="round"/></svg>',
+      tatami_h: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1.5 3 L22.5 3 M1.5 8.5 L22.5 8.5 M1.5 14 L22.5 14 M1.5 19.5 L22.5 19.5" stroke-dasharray="2.6 2.2" stroke-linejoin="round"/></svg>',
+      tatami_v: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 1.5 L3 22.5 M8.5 1.5 L8.5 22.5 M14 1.5 L14 22.5 M19.5 1.5 L19.5 22.5" stroke-dasharray="2.6 2.2" stroke-linejoin="round"/></svg>',
+      cross: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M-32 24 L-8 0 M-24 24 L0 0 M-16 24 L8 0 M-8 24 L16 0 M0 24 L24 0 M8 24 L32 0 M16 24 L40 0 M24 24 L48 0 M-8 0 L16 24 M0 0 L24 24 M8 0 L32 24 M16 0 L40 24 M24 0 L48 24" stroke-dasharray="2.4 2" stroke-linejoin="round"/></svg>',
+      satin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1.6 1.5 L1.6 22.5 M3.7 1.5 L3.7 22.5 M5.8 1.5 L5.8 22.5 M7.9 1.5 L7.9 22.5 M10 1.5 L10 22.5 M12.1 1.5 L12.1 22.5 M14.2 1.5 L14.2 22.5 M16.3 1.5 L16.3 22.5 M18.4 1.5 L18.4 22.5 M20.5 1.5 L20.5 22.5 M22.6 1.5 L22.6 22.5" stroke-linejoin="round"/></svg>',
+      satin_flow: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M-2 23.5C-2 16 7 13 5 0.5 M2.6 23.5C2.6 16 11.6 13 9.6 0.5 M7.2 23.5C7.2 16 16.2 13 14.2 0.5 M11.8 23.5C11.8 16 20.8 13 18.8 0.5 M16.4 23.5C16.4 16 25.4 13 23.4 0.5 M21 23.5C21 16 30 13 28 0.5" stroke-linejoin="round"/></svg>',
+      contour: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2.5L17 2.5Q21.5 2.5 21.5 7L21.5 17Q21.5 21.5 17 21.5L7 21.5Q2.5 21.5 2.5 17L2.5 7Q2.5 2.5 7 2.5Z M9.6 6.8L14.4 6.8Q17.2 6.8 17.2 9.6L17.2 14.4Q17.2 17.2 14.4 17.2L9.6 17.2Q6.8 17.2 6.8 14.4L6.8 9.6Q6.8 6.8 9.6 6.8Z M10.5 12A1.5 1.5 0 1 0 13.5 12A1.5 1.5 0 1 0 10.5 12Z" stroke-linejoin="round"/></svg>',
+      wave: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.2 5.6q2.8 -3.1 5.6 0q2.8 3.1 5.6 0q2.8 -3.1 5.6 0 M2.2 12q2.8 -3.1 5.6 0q2.8 3.1 5.6 0q2.8 -3.1 5.6 0 M2.2 18.4q2.8 -3.1 5.6 0q2.8 3.1 5.6 0q2.8 -3.1 5.6 0" stroke-linejoin="round"/></svg>',
+      zigzag: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 6.2l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6 M1 12.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6 M1 19l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6" stroke-linejoin="round"/></svg>',
+      none: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2.5L17 2.5Q21.5 2.5 21.5 7L21.5 17Q21.5 21.5 17 21.5L7 21.5Q2.5 21.5 2.5 17L2.5 7Q2.5 2.5 7 2.5Z" stroke-dasharray="3 2.6" stroke-linejoin="round"/></svg>',
+      relief_cotes: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.7 1.2 L5.7 22.8 M11.7 1.2 L11.7 22.8 M17.7 1.2 L17.7 22.8" stroke-linejoin="round"/><path d="M2.7 1.2 L2.7 22.8 M8.7 1.2 L8.7 22.8 M14.7 1.2 L14.7 22.8 M20.7 1.2 L20.7 22.8" opacity=".45" stroke-width="2.9" stroke-linejoin="round"/></svg>',
+      relief_chevrons: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M0.6 14l2.85 -5 l2.85 5l2.85 5 l2.85 -5l2.85 -5 l2.85 5l2.85 5 l2.85 -5 M0.6 17.9l2.85 -5 l2.85 5l2.85 5 l2.85 -5l2.85 -5 l2.85 5l2.85 5 l2.85 -5 M0.6 4.6l2.85 -5 l2.85 5l2.85 5 l2.85 -5l2.85 -5 l2.85 5l2.85 5 l2.85 -5 M0.6 8.5l2.85 -5 l2.85 5l2.85 5 l2.85 -5l2.85 -5 l2.85 5l2.85 5 l2.85 -5" stroke-linejoin="round"/></svg>',
+      relief_vagues: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8.6q2.7 -3.4 5.4 0q2.7 3.4 5.4 0q2.7 -3.4 5.4 0 M2 15.6q2.7 -3.4 5.4 0q2.7 3.4 5.4 0q2.7 -3.4 5.4 0" stroke-linejoin="round"/><path d="M2 5q2.7 -3.4 5.4 0q2.7 3.4 5.4 0q2.7 -3.4 5.4 0 M2 12q2.7 -3.4 5.4 0q2.7 3.4 5.4 0q2.7 -3.4 5.4 0 M2 19q2.7 -3.4 5.4 0q2.7 3.4 5.4 0q2.7 -3.4 5.4 0" opacity=".45" stroke-width="2.7" stroke-linejoin="round"/></svg>',
+      relief_damier: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.4 1 L8.4 23M15.6 1 L15.6 23M1 8.4 L23 8.4M1 15.6 L23 15.6 M1 1 L7.9 7.9M7.9 1 L1 7.9 M15.6 1 L22.5 7.9M22.5 1 L15.6 7.9 M8.3 8.3 L15.2 15.2M15.2 8.3 L8.3 15.2 M1 15.6 L7.9 22.5M7.9 15.6 L1 22.5 M15.6 15.6 L22.5 22.5M22.5 15.6 L15.6 22.5" stroke-linejoin="round"/></svg>',
+      relief_vannerie: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1.2 3 L10.8 3 M1.2 5.8 L10.8 5.8 M1.2 8.6 L10.8 8.6M13.2 15.4 L22.8 15.4 M13.2 18.2 L22.8 18.2 M13.2 21 L22.8 21 M15.4 1.2 L15.4 10.8 M18.2 1.2 L18.2 10.8 M21 1.2 L21 10.8M3 13.2 L3 22.8 M5.8 13.2 L5.8 22.8 M8.6 13.2 L8.6 22.8" stroke-linejoin="round"/></svg>',
+      relief_losanges: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M0 -6 L6 0 L0 6 L-6 0Z M24 -6 L30 0 L24 6 L18 0Z M0 18 L6 24 L0 30 L-6 24Z M24 18 L30 24 L24 30 L18 24Z M12 6 L18 12 L12 18 L6 12Z M12 -18 L18 -12 L12 -6 L6 -12Z M12 30 L18 36 L12 42 L6 36Z" stroke-linejoin="round"/></svg>',
+      relief_nid_abeille: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.8 -4.84 L3 -1.72 L-0.6 -1.72 L-2.4 -4.84 L-0.6 -7.96 L3 -7.96Z M4.8 1.4 L3 4.52 L-0.6 4.52 L-2.4 1.4 L-0.6 -1.72 L3 -1.72Z M4.8 7.64 L3 10.76 L-0.6 10.76 L-2.4 7.64 L-0.6 4.52 L3 4.52Z M4.8 13.88 L3 17 L-0.6 17 L-2.4 13.88 L-0.6 10.76 L3 10.76Z M4.8 20.12 L3 23.24 L-0.6 23.24 L-2.4 20.12 L-0.6 17 L3 17Z M10.2 -1.72 L8.4 1.4 L4.8 1.4 L3 -1.72 L4.8 -4.84 L8.4 -4.84Z M10.2 4.52 L8.4 7.64 L4.8 7.64 L3 4.52 L4.8 1.4 L8.4 1.4Z M10.2 10.76 L8.4 13.88 L4.8 13.88 L3 10.76 L4.8 7.64 L8.4 7.64Z M10.2 17 L8.4 20.12 L4.8 20.12 L3 17 L4.8 13.88 L8.4 13.88Z M10.2 23.24 L8.4 26.36 L4.8 26.36 L3 23.24 L4.8 20.12 L8.4 20.12Z M15.6 -4.84 L13.8 -1.72 L10.2 -1.72 L8.4 -4.84 L10.2 -7.96 L13.8 -7.96Z M15.6 1.4 L13.8 4.52 L10.2 4.52 L8.4 1.4 L10.2 -1.72 L13.8 -1.72Z M15.6 7.64 L13.8 10.76 L10.2 10.76 L8.4 7.64 L10.2 4.52 L13.8 4.52Z M15.6 13.88 L13.8 17 L10.2 17 L8.4 13.88 L10.2 10.76 L13.8 10.76Z M15.6 20.12 L13.8 23.24 L10.2 23.24 L8.4 20.12 L10.2 17 L13.8 17Z M21 -1.72 L19.2 1.4 L15.6 1.4 L13.8 -1.72 L15.6 -4.84 L19.2 -4.84Z M21 4.52 L19.2 7.64 L15.6 7.64 L13.8 4.52 L15.6 1.4 L19.2 1.4Z M21 10.76 L19.2 13.88 L15.6 13.88 L13.8 10.76 L15.6 7.64 L19.2 7.64Z M21 17 L19.2 20.12 L15.6 20.12 L13.8 17 L15.6 13.88 L19.2 13.88Z M21 23.24 L19.2 26.36 L15.6 26.36 L13.8 23.24 L15.6 20.12 L19.2 20.12Z M26.4 -4.84 L24.6 -1.72 L21 -1.72 L19.2 -4.84 L21 -7.96 L24.6 -7.96Z M26.4 1.4 L24.6 4.52 L21 4.52 L19.2 1.4 L21 -1.72 L24.6 -1.72Z M26.4 7.64 L24.6 10.76 L21 10.76 L19.2 7.64 L21 4.52 L24.6 4.52Z M26.4 13.88 L24.6 17 L21 17 L19.2 13.88 L21 10.76 L24.6 10.76Z M26.4 20.12 L24.6 23.24 L21 23.24 L19.2 20.12 L21 17 L24.6 17Z" stroke-linejoin="round"/></svg>',
+      relief_ecailles: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M-2.15 5Q2.15 11.4 6.45 5 M6.45 5Q10.75 11.4 15.05 5 M15.05 5Q19.35 11.4 23.65 5 M23.65 5Q27.95 11.4 32.25 5 M-6.45 11Q-2.15 17.4 2.15 11 M2.15 11Q6.45 17.4 10.75 11 M10.75 11Q15.05 17.4 19.35 11 M19.35 11Q23.65 17.4 27.95 11 M-2.15 17Q2.15 23.4 6.45 17 M6.45 17Q10.75 23.4 15.05 17 M15.05 17Q19.35 23.4 23.65 17 M23.65 17Q27.95 23.4 32.25 17 M-6.45 23Q-2.15 29.4 2.15 23 M2.15 23Q6.45 29.4 10.75 23 M10.75 23Q15.05 29.4 19.35 23 M19.35 23Q23.65 29.4 27.95 23" stroke-linejoin="round"/></svg>',
+      relief_coquilles: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 12.5A8.4 8.4 0 0 1 20.4 12.5 M3.6 24.5A8.4 8.4 0 0 1 20.4 24.5 M12 12.5 L4.77 9.13 M12 12.5 L7.14 6.17 M12 12.5 L12 4.52 M12 12.5 L16.86 6.17 M12 12.5 L19.23 9.13 M12 24.5 L4.77 21.13 M12 24.5 L7.14 18.17 M12 24.5 L12 16.52 M12 24.5 L16.86 18.17 M12 24.5 L19.23 21.13" stroke-linejoin="round"/></svg>',
+      relief_pastilles: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.3 6A2.7 2.7 0 1 0 8.7 6A2.7 2.7 0 1 0 3.3 6Z M15.3 6A2.7 2.7 0 1 0 20.7 6A2.7 2.7 0 1 0 15.3 6Z M9.3 12A2.7 2.7 0 1 0 14.7 12A2.7 2.7 0 1 0 9.3 12Z M3.3 18A2.7 2.7 0 1 0 8.7 18A2.7 2.7 0 1 0 3.3 18Z M15.3 18A2.7 2.7 0 1 0 20.7 18A2.7 2.7 0 1 0 15.3 18Z" stroke-linejoin="round"/></svg>',
+      relief_trefle: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 8.3A3.8 3.8 0 1 0 15.8 8.3A3.8 3.8 0 1 0 8.2 8.3Z M8.2 15.7A3.8 3.8 0 1 0 15.8 15.7A3.8 3.8 0 1 0 8.2 15.7Z M4.5 12A3.8 3.8 0 1 0 12.1 12A3.8 3.8 0 1 0 4.5 12Z M11.9 12A3.8 3.8 0 1 0 19.5 12A3.8 3.8 0 1 0 11.9 12Z M11 12A1 1 0 1 0 13 12A1 1 0 1 0 11 12Z" stroke-linejoin="round"/></svg>',
+      relief_etoiles: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 13 L6 9.68 L2.52 10.3 L4.8 7.6 L2.52 4.9 L6 5.52 L7.2 2.2 L8.4 5.52 L11.88 4.9 L9.6 7.6 L11.88 10.3 L8.4 9.68Z M16.8 21.8 L15.6 18.48 L12.12 19.1 L14.4 16.4 L12.12 13.7 L15.6 14.32 L16.8 11 L18 14.32 L21.48 13.7 L19.2 16.4 L21.48 19.1 L18 18.48Z" stroke-linejoin="round"/></svg>',
+      relief_feuilles: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.08 2.87Q9.17 4.87 9.12 10.33Q4.03 8.33 4.08 2.87Z M19.92 2.87Q19.97 8.33 14.88 10.33Q14.83 4.87 19.92 2.87Z M9.12 13.67Q9.17 19.13 4.08 21.13Q4.03 15.67 9.12 13.67Z M14.88 13.67Q19.97 15.67 19.92 21.13Q14.83 19.13 14.88 13.67Z M4.64 3.69 L8.56 9.51 M19.36 3.69 L15.44 9.51 M8.56 14.49 L4.64 20.31 M15.44 14.49 L19.36 20.31" stroke-linejoin="round"/></svg>',
+      relief_spirales: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.05 7.8 L8.15 8.02 L8.12 8.31 L7.95 8.59 L7.62 8.8 L7.19 8.87 L6.73 8.74 L6.31 8.4 L6.04 7.88 L6 7.24 L6.23 6.58 L6.73 6.03 L7.45 5.69 L8.3 5.66 L9.14 5.97 L9.84 6.63 L10.25 7.54 L10.29 8.6 L9.89 9.64 L9.1 10.49 L7.99 11 L6.72 11.04 L5.48 10.58 L4.47 9.64 L3.87 8.35 L3.8 6.86 L4.32 5.42 M15.95 16.4 L15.85 16.62 L15.88 16.91 L16.05 17.19 L16.38 17.4 L16.81 17.47 L17.27 17.34 L17.69 17 L17.96 16.48 L18 15.84 L17.77 15.18 L17.27 14.63 L16.55 14.29 L15.7 14.26 L14.86 14.57 L14.16 15.23 L13.75 16.14 L13.71 17.2 L14.11 18.24 L14.9 19.09 L16.01 19.6 L17.28 19.64 L18.52 19.18 L19.53 18.24 L20.13 16.95 L20.2 15.46 L19.68 14.02" stroke-linejoin="round"/></svg>',
+      relief_vermicelle: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M0.8 6.2q2.6 4.2 5.2 0t5.2 0 5.2 0 5.2 0M2.4 13.4q2.8-4.6 5.6 0t5.6 0 5.6 0 5.6 0M0.8 20.4q2.6 4.2 5.2 0t5.2 0 5.2 0 5.2 0 M4.4 9.8q2.4 3.6 4.8 0t4.8 0M13.6 17q2.4-3.6 4.8 0t4.8 0" stroke-linejoin="round"/></svg>',
     };
     const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${FILL_ICONS[k] || ""}</svg>`;
-    const changed = (i) => edits[i].color !== zones[i].color || edits[i].fill !== zones[i].fill;
-    const regionChanged = (r) => r.color !== edits[r.block].color || r.fill !== edits[r.block].fill;
+    const changed = (i) => edits[i].color !== zones[i].color || edits[i].fill !== zones[i].fill
+      || edits[i].outline !== zones[i].outline;
+    const regionChanged = (r) => r.color !== edits[r.block].color || r.fill !== edits[r.block].fill
+      || r.outline !== edits[r.block].outline;
     const rgb = (h) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16));
     const cur = () => (target?.type === "block" ? edits[target.i] : target ? pending[target.j] : null);
     const isSel = (t) => target && t.type === target.type && (t.i ?? t.j) === (target.i ?? target.j);
@@ -560,8 +571,10 @@
       b.type = "button";
       b.className = "zone-row" + (isSel(t) ? " selected" : "") + (isChanged ? " changed" : "");
       const was = now.color !== base.color ? `<span class="swatch was" style="--c:${base.color}"></span><span class="arrow">→</span>` : "";
+      const fillLabel = now.fill === "none" ? "Sans remplissage" : fills[now.fill];
+      const noOutline = now.outline === false ? " · sans contour" : "";
       b.innerHTML = `${was}<span class="swatch" style="--c:${now.color}"></span>
-        <span class="zone-text"><strong>${label}</strong><small>${fills[now.fill]}</small></span>${icon(now.fill)}`;
+        <span class="zone-text"><strong>${label}</strong><small>${fillLabel}${noOutline}</small></span>${icon(now.fill)}`;
       b.addEventListener("click", (e) => {
         e.stopPropagation();
         const r = b.getBoundingClientRect();
@@ -682,7 +695,8 @@
       }
       if (j < 0) {
         const e0 = edits[hit.z];
-        pending.push({ block: hit.z, fx: (hit.x + 0.5) / zw, fy: (hit.y + 0.5) / zh, color: e0.color, fill: e0.fill, mask: floodRegion(hit.p) });
+        pending.push({ block: hit.z, fx: (hit.x + 0.5) / zw, fy: (hit.y + 0.5) / zh, color: e0.color,
+                       fill: e0.fill, outline: e0.outline, mask: floodRegion(hit.p) });
         j = pending.length - 1;
       }
       select({ type: "region", j }, e.pageX + 10, e.pageY + 10);
@@ -705,11 +719,10 @@
     }
     function openMenu(x, y) {
       const c = cur();
-      $("#zm-swatch").style.setProperty("--c", c.color);
       $("#zm-title").textContent = target.type === "region" ? "Zone fermée"
         : zones[target.i].region !== null ? "Zone isolée" : "Toute la couleur";
-      $("#zm-fill").textContent = fills[c.fill];
       $("#zm-picker").value = c.color;
+      refreshMenu();
       menu.hidden = false;
       showView("main");
       const w = menu.offsetWidth, h = menu.offsetHeight;
@@ -718,6 +731,39 @@
       menu.style.left = `${Math.max(window.scrollX + 8, Math.min(x, maxX))}px`;
       menu.style.top = `${Math.max(window.scrollY + 8, Math.min(y, maxY))}px`;
     }
+    // -- interrupteurs remplissage / point de contour ----------------------------------------
+    const lastFill = new Map();  // dernier motif par zone : rallumer le remplissage le rétablit
+    const targetKey = () => (target.type === "region" ? `r${target.j}` : `b${target.i}`);
+
+    function refreshMenu() {
+      const c = cur();
+      if (!c) return;
+      $("#zm-swatch").style.setProperty("--c", c.color);
+      $("#zm-fill").textContent = c.fill === "none" ? "Sans remplissage" : fills[c.fill];
+      $("#zm-toggle-fill").setAttribute("aria-checked", String(c.fill !== "none"));
+      $("#zm-toggle-outline").setAttribute("aria-checked", String(c.outline !== false));
+    }
+
+    $("#zm-toggle-fill").addEventListener("click", () => {
+      const c = cur();
+      if (!c) return;
+      if (c.fill === "none") {
+        c.fill = lastFill.get(targetKey()) || "tatami";
+      } else {
+        lastFill.set(targetKey(), c.fill);
+        c.fill = "none";
+      }
+      refreshMenu();
+      renderList();
+    });
+    $("#zm-toggle-outline").addEventListener("click", () => {
+      const c = cur();
+      if (!c) return;
+      c.outline = c.outline === false;
+      refreshMenu();
+      renderList();
+    });
+
     function closeMenu() {
       menu.hidden = true;
       // une zone cliquée puis laissée telle quelle n'est pas conservée
@@ -771,7 +817,7 @@
         b.innerHTML = `${icon(k)}<span>${shown}</span>${k === "tatami" ? "<em>par défaut</em>" : ""}`;
         b.addEventListener("click", () => {
           cur().fill = k;
-          $("#zm-fill").textContent = label;
+          refreshMenu();
           renderFills();
           renderList();
         });
@@ -783,7 +829,7 @@
     // -- appliquer / annuler ----------------------------------------------------------------
     const showError = (msg) => { errEl.textContent = msg; errEl.hidden = !msg; };
     resetBtn.addEventListener("click", () => {
-      zones.forEach((z, i) => { edits[i].color = z.color; edits[i].fill = z.fill; });
+      zones.forEach((z, i) => { edits[i].color = z.color; edits[i].fill = z.fill; edits[i].outline = z.outline; });
       pending.length = 0;
       closeMenu();
       renderList();
@@ -793,7 +839,8 @@
       showError("");
       applyBtn.disabled = resetBtn.disabled = true;
       applyBtn.classList.add("loading");
-      const regions = pending.filter(regionChanged).map(({ block, fx, fy, color, fill }) => ({ block, fx, fy, color, fill }));
+      const regions = pending.filter(regionChanged)
+        .map(({ block, fx, fy, color, fill, outline }) => ({ block, fx, fy, color, fill, outline }));
       try {
         const res = await fetch(root.dataset.api, {
           method: "POST",

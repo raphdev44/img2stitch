@@ -104,11 +104,12 @@ def _build_pattern(path, s: Settings):
 
     frame = {"w": masks[0].shape[1], "h": masks[0].shape[0], "ppm": px_per_mm, "cx": 0.0, "cy": 0.0, "scale": 1.0}
     palette, masks, regions = _split_regions(palette, masks, s.region_overrides, px_per_mm)
+    # (couleur de fil, motif de remplissage, point de contour ou None = réglage global)
     looks = [_zone_override(rgb, s.zone_overrides) if regions[i] is None
-             else (tuple(s.region_overrides[regions[i]][2] or rgb), s.region_overrides[regions[i]][3] or "tatami")
+             else _region_look(s.region_overrides[regions[i]], rgb)
              for i, rgb in enumerate(palette)]
     if s.merge_same_colors:
-        order = _merge_order([c for c, _ in looks], masks, px_per_mm, s.overlap_mm)
+        order = _merge_order([c for c, _, _ in looks], masks, px_per_mm, s.overlap_mm)
         palette, masks, regions, looks = ([lst[k] for k in order] for lst in (palette, masks, regions, looks))
     fill_masks = overlap_masks(masks, px_per_mm, s.overlap_mm)
 
@@ -125,9 +126,15 @@ def _build_pattern(path, s: Settings):
     segments = []  # (index du premier point, index de zone) : plusieurs zones peuvent partager un même fil
     tol = np.ones((3, 3), np.uint8)  # tolérance d'1 px : les contours sont sur le bord des formes
     for i, (rgb, mask, fmask) in enumerate(zip(palette, masks, fill_masks)):
-        color, kind = looks[i]
+        color, kind, outline = looks[i]
         passes = zone_fill(kind, fmask, px_per_mm, s)
-        loops = contours_mm(mask, px_per_mm, s.outline_simplify_mm, s.min_area_mm2) if s.outline else []
+        # Le contour se règle zone par zone (None : on suit le réglage global)
+        loops = (contours_mm(mask, px_per_mm, s.outline_simplify_mm, s.min_area_mm2)
+                 if (s.outline if outline is None else outline) else [])
+        # La zone entre au catalogue même si elle ne pique rien (remplissage ET contour coupés) :
+        # elle reste modifiable dans l'éditeur, qui doit retrouver une entrée par couleur.
+        zone_index = len(zones)
+        zones.append((tuple(rgb), regions[i]))
         if not any(data for _, data in passes) and not loops:
             continue
         same = s.merge_same_colors and color == thread  # même fil que la zone précédente : pas de changement
@@ -136,8 +143,7 @@ def _build_pattern(path, s: Settings):
                 pattern.add_command(pe.COLOR_CHANGE)
             pattern.add_thread({"color": (color[0] << 16) | (color[1] << 8) | color[2]})
         first, thread = False, color
-        segments.append((len(pattern.stitches), len(zones)))
-        zones.append((tuple(rgb), regions[i]))
+        segments.append((len(pattern.stitches), zone_index))
 
         hidden = cv2.dilate((fmask | later[i]).astype(np.uint8), tol).astype(bool)
         sw.new_color(hidden, later[i])
@@ -189,7 +195,8 @@ def _split_regions(palette, masks, region_overrides, px_per_mm, tol=40.0, search
     rest = [m.copy() for m in masks]
     extra = [[] for _ in masks]
     r = max(1, round(search_mm * px_per_mm))
-    for ri, ((u, v), source, _, _) in enumerate(region_overrides):
+    for ri, override in enumerate(region_overrides):
+        (u, v), source = override[0], override[1]
         d = [math.dist(source, c) for c in palette]
         k = int(np.argmin(d))
         if d[k] > tol:
@@ -217,16 +224,28 @@ def _split_regions(palette, masks, region_overrides, px_per_mm, tol=40.0, search
     return out_p, out_m, out_r
 
 
+def _override_parts(override):
+    """(source, fil, motif, contour) d'une retouche ; le contour est optionnel (anciens projets)."""
+    return (override[0], override[1], override[2], override[3] if len(override) > 3 else None)
+
+
 def _zone_override(rgb, overrides, tol=40.0):
-    """(couleur de fil, motif de remplissage) d'une zone, d'après la retouche dont la couleur d'origine est la plus proche."""
+    """(couleur de fil, motif de remplissage, point de contour) d'une zone, d'après la retouche dont la
+    couleur d'origine est la plus proche. Le contour vaut None quand la zone suit le réglage global."""
     best, best_d = None, tol
-    for source, color, kind in overrides:
+    for override in overrides:
+        source, color, kind, outline = _override_parts(override)
         d = math.dist(source, rgb)
         if d <= best_d:
-            best, best_d = (color, kind), d
+            best, best_d = (color, kind, outline), d
     if best is None:
-        return tuple(rgb), "tatami"
-    return tuple(best[0] or rgb), best[1] or "tatami"
+        return tuple(rgb), "tatami", None
+    return tuple(best[0] or rgb), best[1] or "tatami", best[2]
+
+
+def _region_look(override, rgb):
+    """(couleur, motif, contour) d'une zone fermée isolée : ((u, v), source, fil, motif[, contour])."""
+    return (tuple(override[2] or rgb), override[3] or "tatami", override[4] if len(override) > 4 else None)
 
 
 def pattern_stats(pattern):
