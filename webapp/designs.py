@@ -21,10 +21,12 @@ from werkzeug.utils import secure_filename
 
 from img2stitch import (Settings, color_palettes, estimate_colors, image_to_pattern, natural_size_mm,
                         render_photo_preview, render_raw_preview)
-from img2stitch.convert import SIZE_MARGIN_MM, _zone_override, pattern_stats, pattern_to_image
+from img2stitch.convert import (SIZE_MARGIN_MM, _region_look, _zone_override, pattern_stats,
+                                pattern_to_image, thread_lengths_mm)
 from img2stitch.cross_stitch import MAX_COLORS as CROSS_STITCH_MAX_COLORS, cross_stitch_palettes, cross_stitch_pattern
 from img2stitch.fill import FILL_TYPES
 from img2stitch.relief import LEGACY as RELIEF_LEGACY
+from img2stitch.smart import thin_band_regions
 from img2stitch.photo import FABRICS, stitch_bbox_mm
 
 log = logging.getLogger(__name__)
@@ -91,6 +93,23 @@ class DesignStore:
         meta["has_photo"] = (d / PHOTO).is_file()
         meta["has_thumb"] = (d / THUMB).is_file()
         return meta
+
+    def thread_lengths(self, design_id):
+        """Longueur de fil estimée (m) par fil, dans l'ordre de d.threads.
+
+        Les motifs générés avant ce calcul n'ont pas la valeur en mémoire : on la déduit de
+        pattern.json, sans relancer la conversion.
+        """
+        meta = self.get(design_id)
+        if meta is None:
+            return []
+        cached = meta.get("thread_lengths")
+        if cached is not None:
+            return cached
+        d = self.dir(design_id)
+        if meta.get("status") != "ready" or not (d / PATTERN_DATA).is_file():
+            return []
+        return [round(v / 1000, 2) for v in thread_lengths_mm(_load_pattern(d))]
 
     def list(self):
         items = [self.get(d.name) for d in self.root.iterdir() if d.is_dir()]
@@ -259,7 +278,7 @@ class DesignStore:
 
     # --- Création ---
     def create(self, stream, filename, n_colors, background, target_mm, excluded=(), thicken_lines=False,
-               *, mode="classic"):
+               *, smart_fill=False, mode="classic"):
         img = _load_image(stream)
         design_id = uuid.uuid4().hex
         d = self.root / design_id
@@ -277,11 +296,14 @@ class DesignStore:
             "target_mm": list(target_mm) if target_mm else None,
             "excluded": list(excluded),
             "thicken_lines": bool(thicken_lines),
+            "smart_fill": bool(smart_fill),
             "fabric": DEFAULT_FABRIC,
             "status": "processing",
             "step": "Analyse de l'image",
             "error": None,
         }
+        if smart_fill and mode == "classic":
+            meta["regions"] = _smart_regions(d, n_colors, background, target_mm, excluded, thicken_lines)
         if mode == "cross_stitch":
             meta.update(cross_stitch_color_limit=n_colors or None, cross_stitch_colors={})
         self._write(d, meta)
@@ -335,6 +357,7 @@ class DesignStore:
                 step="Rendu réaliste",
                 stats=stats,
                 threads=["#%06x" % (t.color & 0xFFFFFF) for t in pattern.threadlist],
+                thread_lengths=[round(v / 1000, 2) for v in thread_lengths_mm(pattern)],
                 zones=zones,
                 regions=regions,
                 frame=frame,
@@ -516,9 +539,34 @@ def _settings(meta):
                     exclude_colors=_exclude_setting(meta.get("excluded", [])),
                     thicken_lines=bool(meta.get("thicken_lines")),
                     zone_overrides=_zone_setting(meta.get("zones") or []),
-                    region_overrides=tuple(((r["u"], r["v"]), _rgb(r["source"]), _rgb(r["color"]), r["fill"],
-                                            r.get("outline", True)) for r in meta.get("regions") or []),
+                    # Une zone restée de la couleur de sa forme suit la palette réellement générée :
+                    # la couleur mémorisée à la création (quantification à une autre résolution) peut
+                    # différer de quelques unités et créer un fil en trop.
+                    region_overrides=tuple(((r["u"], r["v"]), _rgb(r["source"]),
+                                            None if r["color"].lower() == r["source"].lower() else _rgb(r["color"]),
+                                            r["fill"], r.get("outline", True)) for r in meta.get("regions") or []),
                     merge_same_colors=bool(meta.get("merge_colors")))
+
+
+def _smart_regions(d, n_colors, background, target_mm, excluded, thicken_lines):
+    """Zones fermées des bandes fines à broder en satin tournant (« Remplissage intelligent »).
+
+    Détectées une fois, à la création : elles deviennent des zones comme les autres, modifiables
+    dans l'éditeur, et survivent aux retouches qui régénèrent le motif.
+    """
+    bg, scope = BACKGROUND_MODES[background]
+    s = Settings(n_colors=n_colors, background=bg, background_scope=scope,
+                 exclude_colors=_exclude_setting(excluded), thicken_lines=thicken_lines,
+                 max_width_mm=target_mm[0] if target_mm else None,
+                 max_height_mm=target_mm[1] if target_mm else None)
+    try:
+        shapes = thin_band_regions(d / SOURCE, s)
+    except Exception:
+        log.exception("Remplissage intelligent : détection impossible pour %s", d.name)
+        return []
+    log.info("Remplissage intelligent : %d bande(s) fine(s) sur %s", len(shapes), d.name)
+    return [{"source": _hex(rgb), "u": round(u, 4), "v": round(v, 4), "color": _hex(rgb),
+             "fill": "satin_flow", "outline": False} for u, v, rgb in shapes]
 
 
 def _zone_setting(zones):
@@ -540,7 +588,9 @@ def _zones_of(pattern, s, regions):
                         "outline": True if outline is None else outline, "region": None})
         else:
             r = regions[ri]
-            out.append({"source": _hex(src), "color": r["color"], "fill": r["fill"],
+            # couleur réellement piquée : la forme suit sa palette si elle n'a pas été recolorée
+            color = _hex(_region_look(s.region_overrides[ri], _rgb(r["source"]))[0])
+            out.append({"source": _hex(src), "color": color, "fill": r["fill"],
                         "outline": r.get("outline", True), "region": new_index[ri]})
     return out, [regions[ri] for ri in used]
 

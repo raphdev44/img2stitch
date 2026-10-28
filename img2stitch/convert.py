@@ -137,7 +137,9 @@ def _build_pattern(path, s: Settings):
         zones.append((tuple(rgb), regions[i]))
         if not any(data for _, data in passes) and not loops:
             continue
-        same = s.merge_same_colors and color == thread  # même fil que la zone précédente : pas de changement
+        # Un bloc qui reprend le fil de la zone précédente n'a pas besoin d'arrêt machine ; c'est le cas
+        # des bandes fines isolées en zones (lettrage, rubans) et des couleurs réunies par _merge_order.
+        same = color == thread
         if not same:
             if not first:
                 pattern.add_command(pe.COLOR_CHANGE)
@@ -246,6 +248,36 @@ def _zone_override(rgb, overrides, tol=40.0):
 def _region_look(override, rgb):
     """(couleur, motif, contour) d'une zone fermée isolée : ((u, v), source, fil, motif[, contour])."""
     return (tuple(override[2] or rgb), override[3] or "tatami", override[4] if len(override) > 4 else None)
+
+
+THREAD_LOOP_FACTOR = 1.3  # boucles, tension et reprise du fil au ras du tissu
+THREAD_SETUP_MM = 80      # amorçage et coupe, pour chaque fil
+
+
+def thread_lengths_mm(pattern, factor=THREAD_LOOP_FACTOR, setup_mm=THREAD_SETUP_MM):
+    """Longueur de fil estimée (mm) par fil, dans l'ordre de threadlist.
+
+    Somme des segments réellement piqués par ce fil, majorée des boucles et de la tension,
+    plus l'amorçage et la coupe. Les sauts et les coupes ne sont pas comptés : le fil y est
+    tiré puis coupé, sans être posé sur le tissu.
+    """
+    count = len(pattern.threadlist)
+    if not count:
+        return []
+    lengths = [0.0] * count
+    index, last = 0, None
+    for x, y, command in pattern.stitches:
+        kind = command & pe.COMMAND_MASK
+        if kind == pe.COLOR_CHANGE:
+            index = min(index + 1, count - 1)
+            last = None
+        elif kind == pe.STITCH:
+            if last is not None:
+                lengths[index] += math.hypot(x - last[0], y - last[1]) / 10.0
+            last = (x, y)
+        else:
+            last = (x, y)
+    return [round(value * factor + setup_mm) for value in lengths]
 
 
 def pattern_stats(pattern):

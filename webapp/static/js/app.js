@@ -291,9 +291,29 @@
     ["dragenter", "dragover"].forEach((t) => zone.addEventListener(t, (e) => { e.preventDefault(); zone.classList.add("over"); }));
     ["dragleave", "drop"].forEach((t) => zone.addEventListener(t, (e) => { e.preventDefault(); zone.classList.remove("over"); }));
     zone.addEventListener("drop", (e) => setFile(e.dataTransfer.files[0]));
+
+    // Image du presse-papiers : certains navigateurs ne la mettent que dans `items` (captures
+    // d'écran, images copiées d'une page), et le fichier peut arriver sans nom.
+    const pastedFile = (e) => {
+      const data = e.clipboardData;
+      if (!data) return null;
+      const item = [...(data.items || [])].find((it) => it.kind === "file" && it.type.startsWith("image/"));
+      let f = item?.getAsFile() || [...(data.files || [])].find((f) => f.type.startsWith("image/"));
+      if (!f) return null;
+      const type = f.type || item?.type || "image/png";
+      if (!f.name) {  // un fichier sans nom serait refusé par le serveur
+        const ext = { "image/jpeg": "jpg", "image/webp": "webp", "image/avif": "avif" }[type] || "png";
+        f = new File([f], `collage.${ext}`, { type });
+      } else if (!f.type) {
+        f = new File([f], f.name, { type });
+      }
+      return f;
+    };
     document.addEventListener("paste", (e) => {
-      const f = [...(e.clipboardData?.files || [])][0];
-      if (f) setFile(f);
+      const f = pastedFile(e);
+      if (!f) return;
+      e.preventDefault();
+      setFile(f);
     });
 
     form.addEventListener("submit", async (e) => {
@@ -313,6 +333,7 @@
         data.append("width_mm", sizeInputs[0].value);
         data.append("height_mm", sizeInputs[1].value);
         data.append("thicken_lines", $("#thicken-lines").checked ? "true" : "false");
+        data.append("smart_fill", $("#smart-fill").checked ? "true" : "false");
       }
       try {
         const res = await fetch(form.action, { method: "POST", body: data });
@@ -553,6 +574,12 @@
       relief_etoiles: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 13 L6 9.68 L2.52 10.3 L4.8 7.6 L2.52 4.9 L6 5.52 L7.2 2.2 L8.4 5.52 L11.88 4.9 L9.6 7.6 L11.88 10.3 L8.4 9.68Z M16.8 21.8 L15.6 18.48 L12.12 19.1 L14.4 16.4 L12.12 13.7 L15.6 14.32 L16.8 11 L18 14.32 L21.48 13.7 L19.2 16.4 L21.48 19.1 L18 18.48Z" stroke-linejoin="round"/></svg>',
       relief_feuilles: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.08 2.87Q9.17 4.87 9.12 10.33Q4.03 8.33 4.08 2.87Z M19.92 2.87Q19.97 8.33 14.88 10.33Q14.83 4.87 19.92 2.87Z M9.12 13.67Q9.17 19.13 4.08 21.13Q4.03 15.67 9.12 13.67Z M14.88 13.67Q19.97 15.67 19.92 21.13Q14.83 19.13 14.88 13.67Z M4.64 3.69 L8.56 9.51 M19.36 3.69 L15.44 9.51 M8.56 14.49 L4.64 20.31 M15.44 14.49 L19.36 20.31" stroke-linejoin="round"/></svg>',
       relief_spirales: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.05 7.8 L8.15 8.02 L8.12 8.31 L7.95 8.59 L7.62 8.8 L7.19 8.87 L6.73 8.74 L6.31 8.4 L6.04 7.88 L6 7.24 L6.23 6.58 L6.73 6.03 L7.45 5.69 L8.3 5.66 L9.14 5.97 L9.84 6.63 L10.25 7.54 L10.29 8.6 L9.89 9.64 L9.1 10.49 L7.99 11 L6.72 11.04 L5.48 10.58 L4.47 9.64 L3.87 8.35 L3.8 6.86 L4.32 5.42 M15.95 16.4 L15.85 16.62 L15.88 16.91 L16.05 17.19 L16.38 17.4 L16.81 17.47 L17.27 17.34 L17.69 17 L17.96 16.48 L18 15.84 L17.77 15.18 L17.27 14.63 L16.55 14.29 L15.7 14.26 L14.86 14.57 L14.16 15.23 L13.75 16.14 L13.71 17.2 L14.11 18.24 L14.9 19.09 L16.01 19.6 L17.28 19.64 L18.52 19.18 L19.53 18.24 L20.13 16.95 L20.2 15.46 L19.68 14.02" stroke-linejoin="round"/></svg>',
+      relief_pelage: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 5.2 L5.6 8.4 M8.2 4.4 L10.4 7.6 M13 5.2 L15.2 8.4 M17.8 4.4 L20 7.6 M2 11 L4.2 14.2 M6.8 12.2 L9 15.4 M11.6 11 L13.8 14.2 M16.4 12.2 L18.6 15.4 M21.2 11 L23.4 14.2 M3.4 18.8 L5.6 22 M8.2 18 L10.4 21.2 M13 18.8 L15.2 22 M17.8 18 L20 21.2"/></svg>',
+      relief_pelage_long: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.6 21.4 C5.4 15.4 8.6 9.8 12.2 4.2 M8.2 21.8 C11 15.8 14.2 10.2 17.8 4.6 M13.8 22.2 C16.6 16.2 19.8 10.6 23.4 5"/></svg>',
+      relief_plumes: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.2C7.4 6.4 6.6 12.6 12 21.8C17.4 12.6 16.6 6.4 12 2.2Z M12 5.4 L12 19.4 M12 8.6 L8.9 7.1 M12 8.6 L15.1 7.1 M12 11.6 L8.4 10.1 M12 11.6 L15.6 10.1 M12 14.6 L8.9 13.1 M12 14.6 L15.1 13.1" stroke-linejoin="round"/></svg>',
+      relief_plumes_couchees: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.6 21.4C2.8 16.6 4.6 10.8 10.4 6.2C10.8 12.6 8.6 18.2 4.6 21.4Z M5.2 20.2 L9.4 7.4 M12.4 22C10.6 17.2 12.4 11.4 18.2 6.8C18.6 13.2 16.4 18.8 12.4 22Z M13 20.8 L17.2 8" stroke-linejoin="round"/></svg>',
+      relief_triskele: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9.3 L12.63 8.83 L13.43 8.52 L14.37 8.42 L15.39 8.57 L16.43 9 L17.41 9.71 L18.27 10.69 L18.94 11.93 L19.34 13.37 L19.43 14.96 M14.34 13.35 L14.43 14.13 L14.3 14.98 L13.91 15.84 L13.27 16.65 L12.39 17.34 L11.28 17.84 L10 18.09 L8.6 18.05 L7.14 17.68 L5.72 16.96 M9.66 13.35 L8.94 13.04 L8.27 12.5 L7.72 11.74 L7.34 10.78 L7.19 9.67 L7.31 8.46 L7.73 7.22 L8.47 6.03 L9.51 4.96 L10.85 4.08 M12 12 m-1.15 0a1.15 1.15 0 1 0 2.3 0a1.15 1.15 0 1 0-2.3 0"/></svg>',
+      relief_entrelacs: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.2 7.8 L13.9 8.7 L14.5 9.7 L14.9 10.8 L15 12 L14.9 13.2 L14.5 14.3 L13.9 15.3 L13.2 16.2 L12.2 16.9 L11.1 17.4 L10 17.7 L8.8 17.7 L7.7 17.5 L6.6 17 L5.6 16.3 L4.8 15.5 L4.2 14.5 L3.8 13.4 L3.6 12.2 L3.7 11 L4 9.9 L4.5 8.9 L5.3 8 L6.2 7.2 L7.3 6.7 L8.4 6.4 L9.6 6.3 L10.7 6.5 M10.8 16.2 L10.1 15.3 L9.5 14.3 L9.1 13.2 L9 12 L9.1 10.8 L9.5 9.7 L10.1 8.7 L10.8 7.8 L11.8 7.1 L12.9 6.6 L14 6.3 L15.2 6.3 L16.3 6.5 L17.4 7 L18.4 7.7 L19.2 8.5 L19.8 9.5 L20.2 10.6 L20.4 11.8 L20.3 13 L20 14.1 L19.5 15.1 L18.7 16 L17.8 16.8 L16.7 17.3 L15.6 17.6 L14.4 17.7 L13.3 17.5" stroke-linejoin="round"/></svg>',
       relief_vermicelle: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M0.8 6.2q2.6 4.2 5.2 0t5.2 0 5.2 0 5.2 0M2.4 13.4q2.8-4.6 5.6 0t5.6 0 5.6 0 5.6 0M0.8 20.4q2.6 4.2 5.2 0t5.2 0 5.2 0 5.2 0 M4.4 9.8q2.4 3.6 4.8 0t4.8 0M13.6 17q2.4-3.6 4.8 0t4.8 0" stroke-linejoin="round"/></svg>',
     };
     const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${FILL_ICONS[k] || ""}</svg>`;

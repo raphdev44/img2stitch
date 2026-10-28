@@ -21,7 +21,7 @@ def _disk(n=200):
 
 
 def test_relief_is_wired_into_the_single_palette():
-    assert len(RELIEF) == 15
+    assert len(RELIEF) == 21
     for key in RELIEF:
         assert key in ALL_FILLS, key           # visible dans l'éditeur
         assert key.startswith("relief_")
@@ -158,6 +158,90 @@ def test_stipple_is_a_free_meander_without_base():
     longest = max(runs, key=lambda r: len(r["pts"]))
     ys = [p[1] for p in longest["pts"]]
     assert max(ys) - min(ys) > 1.0               # ça ondule vraiment
+
+
+# --- 4) Pelage ------------------------------------------------------------------------------
+def test_fur_is_made_of_long_stitches():
+    # Une fourrure n'est pas un satin : le fil est couché DANS le poil, en points de 2-3 mm.
+    runs = relief._fur_runs("relief_pelage", _disk(), 10)
+    assert runs
+    steps = []
+    for r in runs:
+        path = [r["p0"]] + r["pts"]
+        steps += [math.dist(a, b) for a, b in zip(path, path[1:])]
+    assert np.median(steps) > 2.0             # pas de satin à 0,45 mm
+    assert max(steps) < 3.6
+
+
+def test_fur_strands_share_the_coat_direction():
+    runs = relief._fur_runs("relief_pelage", _disk(), 10)
+    ang = math.radians(relief.FUR["relief_pelage"]["angle"])
+    d = np.array([math.cos(ang), math.sin(ang)])
+    cosines = []
+    for r in runs:
+        v = np.array(r["p1"]) - np.array(r["p0"])
+        if np.linalg.norm(v) > 2.0:
+            cosines.append(abs(float(v @ d) / np.linalg.norm(v)))
+    assert np.median(cosines) > 0.98          # ±8° de biais au pire
+
+
+def test_fur_has_a_combing_base():
+    mask = _disk()
+    for kind in relief.FUR:
+        passes = zone_fill(kind, mask, 10, SETTINGS)
+        assert len(passes) == 2, kind
+        # fond : tatami dans le sens du poil ; puis les mèches par-dessus.
+        assert passes[0][1] == relief._base_runs(mask, 10, SETTINGS, angle=relief.FUR[kind]["angle"])
+        assert passes[1][1] == relief._fur_runs(kind, mask, 10)
+
+
+def test_two_fur_lengths():
+    assert relief.FUR["relief_pelage_long"]["length"] > 1.4 * relief.FUR["relief_pelage"]["length"]
+
+
+# --- 5) Plumes -------------------------------------------------------------------------------
+def test_feather_vane_is_solid_satin():
+    rims, vane, spines = relief._feather_runs("relief_plumes", _disk(), 10, SETTINGS)
+    assert rims and vane and spines
+    widths = [math.dist(r["p0"], r["p1"]) for r in vane]
+    assert np.median(widths) > 1.5            # les points traversent la barbe
+    assert all(r["max_len"] == min(SETTINGS.max_stitch_mm, 4.0) for r in vane)
+
+
+def test_feather_layers_are_stacked_rim_under_vane():
+    passes = [data for _, data in zone_fill("relief_plumes", _disk(), 10, SETTINGS) if data]
+    assert len(passes) == 4                    # fond, ourlet, barbe, rachis
+    comps = [{r["comp"] for r in layer} for layer in passes[1:]]
+    assert comps[0] != comps[1]                # nos deux premières couches ne se mélangent pas
+
+
+def test_feather_orientations_differ():
+    assert relief.PLUME_TILING["relief_plumes"][2] == 12.0
+    assert relief.PLUME_TILING["relief_plumes_couchees"][2] == 55.0
+
+
+# --- 6) Formes celtiques ---------------------------------------------------------------------
+def test_interlace_ribbons_are_continuous_bands():
+    runs = relief._interlace_runs(_disk(), 10)
+    assert runs
+    comps = {r["comp"] for r in runs}
+    assert len(comps) < len(runs)              # un comp par ruban, pas un par segment
+    assert {c // 100000 for c in comps} == {0, 1}   # les deux familles à 45°
+
+
+def test_interlace_ribbons_are_packed_like_a_weave():
+    # Des rubans jointifs (pas une grille) et un vrai passage sous l'autre.
+    assert relief.INTERLACE_WIDTH >= 0.45 * relief.INTERLACE_PERIOD
+    assert relief.INTERLACE_GAP > 0.1
+    assert relief.INTERLACE_GAP < relief.INTERLACE_WIDTH
+
+
+def test_triskele_is_a_large_three_arm_motif():
+    shapes = relief._motifs("relief_triskele", 0.0, 0.0, 0, 0)
+    assert len(shapes) == 4                    # trois bras + moyeu
+    reaches = [np.hypot(s[-1][0], s[-1][1]) for s in shapes[:3]]
+    assert all(r > 3.5 for r in reaches)
+    assert relief.TILINGS["relief_triskele"][1] >= 13.0
 
 
 # --- Compatibilité ---------------------------------------------------------------------------

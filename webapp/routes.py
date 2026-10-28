@@ -140,6 +140,7 @@ def api_delete(design_id):
 def design(design_id):
     meta = store().get(design_id) or abort(404)
     return render_template("design.html", d=meta, formats=FORMATS, bg_labels=BG_LABELS,
+                           thread_lengths=store().thread_lengths(design_id),
                            fabrics={k: (FABRIC_LABELS.get(k, k.capitalize()), v) for k, v in FABRICS.items()})
 
 
@@ -190,7 +191,9 @@ def api_create():
     try:
         excluded = parse_exclusions(request.form.get("exclude"))
         thicken_lines = request.form.get("thicken_lines") == "true"
-        design_id = store().create(f.stream, f.filename, n_colors, background, target, excluded, thicken_lines)
+        smart_fill = request.form.get("smart_fill") == "true"
+        design_id = store().create(f.stream, f.filename, n_colors, background, target, excluded, thicken_lines,
+                                   smart_fill=smart_fill)
     except InvalidImage as e:
         return jsonify(error=str(e)), 400
     return jsonify(_public(store().get(design_id))), 202

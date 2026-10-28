@@ -13,7 +13,8 @@
     <div class="dz-empty">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
       <strong>Glissez votre image ici</strong>
-      <span>ou cliquez pour parcourir · PNG, JPG, WebP ou AVIF · 20 Mo max</span>
+      <span>ou collez une image copiée (Ctrl+V), ou cliquez pour parcourir</span>
+      <span>PNG, JPG, WebP ou AVIF · 20 Mo max</span>
     </div>
     <div class="dz-preview" hidden>
       <img id="image-preview" alt="Aperçu de l'image">
@@ -64,6 +65,11 @@
         <input type="checkbox" id="thicken-lines">
         <span><strong>Épaissir les lignes trop fines</strong>
           <small>Renforce les traits fins pour éviter qu'ils disparaissent dans la broderie.</small></span>
+      </label>
+      <label class="choice">
+        <input type="checkbox" id="smart-fill">
+        <span><strong>Remplissage intelligent</strong>
+          <small>Détecte les bandes fines (lettrages, rubans, tiges) et les brode en satin tournant, sans point de contour.</small></span>
       </label>
     </details>
 

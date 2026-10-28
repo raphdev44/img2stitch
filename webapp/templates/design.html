@@ -116,8 +116,14 @@
             <input type="color" value="{{ c }}" data-from="{{ c }}" aria-label="Changer la couleur du fil {{ c }}">
           </label>
           {% else %}<span class="swatch" style="--c: {{ c }}"></span>{% endif %}
-          <code>{{ c }}</code></li>{% endfor %}
+          <code>{{ c }}</code>
+          {% if loop.index0 < thread_lengths | length %}<span class="thread-len">{{ ('%.1f' % thread_lengths[loop.index0]) | replace('.', ',') }} m</span>{% endif %}
+        </li>{% endfor %}
       </ol>
+      {% if thread_lengths %}
+      <p class="thread-total"><span>Fil total estimé</span><strong>{{ ('%.1f' % (thread_lengths | sum)) | replace('.', ',') }} m</strong></p>
+      <p class="hint">Longueur par fil : points piqués + 30 % (boucles et tension), plus l'amorçage et la coupe.</p>
+      {% endif %}
       {% if editable %}<p class="hint">Cliquez sur une pastille pour changer la couleur de ce fil dans toute la broderie.</p>{% endif %}
       {% if editable and d.mode != 'cross_stitch' and d.threads | length != d.threads | unique | list | length %}
       <div class="merge-box">
