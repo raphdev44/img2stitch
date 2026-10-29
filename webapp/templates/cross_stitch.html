@@ -49,6 +49,10 @@
       <span class="btn-label">Générer le point de croix</span>
       <span class="spinner" aria-hidden="true"></span>
     </button>
+    <div class="inline-progress" id="create-progress" role="status" aria-live="polite" hidden>
+      <span>Génération du point de croix en cours…</span>
+      <progress class="task-progress" aria-label="Génération du point de croix en cours"></progress>
+    </div>
   </div>
 </form>
 {% endblock %}

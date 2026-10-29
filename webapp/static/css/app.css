@@ -268,11 +268,23 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px va
   backdrop-filter: blur(8px); box-shadow: var(--shadow);
 }
 .stage-progress small { color: var(--muted); }
+.task-progress {
+  display: block; width: min(320px, 70vw); height: 8px; overflow: hidden;
+  border: 0; border-radius: 999px; background: var(--surface-2); color: var(--accent);
+  accent-color: var(--accent);
+}
+.task-progress::-webkit-progress-bar { border-radius: 999px; background: var(--surface-2); }
+.task-progress::-webkit-progress-value { border-radius: 999px; background: var(--accent); transition: width .3s ease; }
+.task-progress::-moz-progress-bar { border-radius: 999px; background: var(--accent); }
+.inline-progress { display: grid; justify-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
 
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; }
 .stats div { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
 .stats dt { font-size: 12px; color: var(--muted); }
 .stats dd { margin: 2px 0 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.optimize-box { margin-top: 14px; }
+.optimize-box .btn-primary { min-height: 44px; }
+.optimization-result { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); font-size: 13px; }
 
 .threads { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .threads li { display: flex; align-items: center; gap: 8px; min-width: 0; }

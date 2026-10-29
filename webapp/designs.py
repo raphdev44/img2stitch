@@ -25,6 +25,7 @@ from img2stitch.convert import (SIZE_MARGIN_MM, _region_look, _zone_override, pa
                                 pattern_to_image, thread_lengths_mm)
 from img2stitch.cross_stitch import MAX_COLORS as CROSS_STITCH_MAX_COLORS, cross_stitch_palettes, cross_stitch_pattern
 from img2stitch.fill import FILL_TYPES
+from img2stitch.optimize import optimize_pattern
 from img2stitch.relief import LEGACY as RELIEF_LEGACY
 from img2stitch.smart import thin_band_regions
 from img2stitch.photo import FABRICS, stitch_bbox_mm
@@ -186,7 +187,7 @@ class DesignStore:
                 meta.update(cross_stitch_color_limit=n_colors, cross_stitch_colors={})
             meta.update(cross_stitch_previous=previous, editing=True, zones_previous=meta.get("zones"),
                         regions_previous=meta.get("regions"), status="processing", error=None, edit_error=None,
-                        step="Mise à jour des couleurs du point de croix")
+                        step="Mise à jour des couleurs du point de croix", progress=5)
             self._write(d, meta)
         self._pool.submit(self._generate, d)
 
@@ -201,9 +202,92 @@ class DesignStore:
             # "editing" : en cas d'échec le motif reste utilisable, avec ses zones d'avant
             meta.update(merge_colors=enabled, editing=True, zones_previous=meta.get("zones"),
                         regions_previous=meta.get("regions"), status="processing",
-                        step="Fusion des fils de même couleur", error=None, edit_error=None)
+                        step="Fusion des fils de même couleur", progress=5, error=None, edit_error=None)
             self._write(d, meta)
         self._pool.submit(self._generate, d)
+
+    def optimize(self, design_id):
+        d = self.dir(design_id)
+        with self._modify_lock:
+            meta = self._read(d)
+            if meta.get("mode") == "cross_stitch":
+                raise InvalidImage("L'optimisation est réservée aux motifs de broderie classiques.")
+            if meta.get("status") != "ready" or meta.get("photo_rendering"):
+                raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
+            meta.update(
+                editing=True,
+                zones_previous=meta.get("zones"),
+                regions_previous=meta.get("regions"),
+                status="processing",
+                step="Nettoyage des points et déplacements",
+                progress=5,
+                error=None,
+                edit_error=None,
+            )
+            self._write(d, meta)
+        self._pool.submit(self._optimize, d)
+
+    def _optimize(self, d):
+        meta = self._read(d)
+        staged = []
+        try:
+            pattern, report = optimize_pattern(_load_pattern(d))
+            self._update(d, meta, step="Préparation des fichiers machine", progress=35)
+            stats = pattern_stats(pattern)
+            x0, y0, x1, y1 = stitch_bbox_mm(pattern)
+            zones_path = d / ".optimized.tmp.png"
+            photo_path = d / ".optimized-photo.tmp.png"
+            raw_path = d / ".optimized-raw.tmp.png"
+            thumb_path = d / ".optimized-thumb.tmp.jpg"
+            data_path = d / ".optimized-data.tmp.json"
+            staged.extend((zones_path, photo_path, raw_path, thumb_path, data_path))
+            _save_pattern(pattern, str(data_path))
+            _render_zone_map(pattern, str(zones_path))
+            render_raw_preview(pattern, str(raw_path))
+            render_photo_preview(pattern, str(photo_path), fabric=meta.get("fabric", DEFAULT_FABRIC))
+            _make_thumb_from(photo_path, thumb_path)
+            for index, fmt in enumerate(FORMATS, 1):
+                path = d / f".optimized.tmp.{fmt}"
+                staged.append(path)
+                pe.write(pattern, str(path), {"tie_on": True, "tie_off": True})
+                self._update(d, meta, progress=35 + round(40 * index / len(FORMATS)))
+
+            self._update(d, meta, step="Mise à jour des aperçus", progress=82)
+            replacements = [
+                (data_path, d / PATTERN_DATA),
+                (zones_path, d / ZONES),
+                (raw_path, d / RAW),
+                (photo_path, d / PHOTO),
+                (thumb_path, d / THUMB),
+            ] + [(d / f".optimized.tmp.{fmt}", d / f"pattern.{fmt}") for fmt in FORMATS]
+            for source, target in replacements:
+                os.replace(source, target)
+
+            report["after"]["colors"] = len(pattern.threadlist)
+            report["after"]["stats"] = stats
+            report["before"]["stats"] = meta.get("stats")
+            self._update(
+                d, meta,
+                status="ready",
+                step=None,
+                progress=100,
+                editing=False,
+                zones_previous=None,
+                regions_previous=None,
+                stats=stats,
+                threads=["#%06x" % (t.color & 0xFFFFFF) for t in pattern.threadlist],
+                thread_lengths=[round(v / 1000, 2) for v in thread_lengths_mm(pattern)],
+                size_mm=[round(float(x1 - x0), 1), round(float(y1 - y0), 1)],
+                photo_version=meta.get("photo_version", 0) + 1,
+                optimization_report=report,
+                edit_error=None,
+            )
+        except Exception:
+            log.exception("Échec de l'optimisation pour %s", d.name)
+            self._fail(d, meta, "L'optimisation du motif a échoué.")
+        finally:
+            for path in staged:
+                path.unlink(missing_ok=True)
 
     # --- Édition des zones ---
     def zones(self, design_id):
@@ -264,7 +348,8 @@ class DesignStore:
                 raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
             meta.update(zones_previous=meta.get("zones"), regions_previous=meta.get("regions"),
                         zones=[z for z in zones if z["region"] is None], regions=regions, editing=True,
-                        status="processing", step="Application des modifications", error=None, edit_error=None)
+                        status="processing", step="Application des modifications", progress=5,
+                        error=None, edit_error=None)
             self._write(d, meta)
         self._pool.submit(self._generate, d)
 
@@ -300,6 +385,7 @@ class DesignStore:
             "fabric": DEFAULT_FABRIC,
             "status": "processing",
             "step": "Analyse de l'image",
+            "progress": 5,
             "error": None,
         }
         if smart_fill and mode == "classic":
@@ -327,6 +413,7 @@ class DesignStore:
                     raise InvalidImage(str(exc)) from exc
             else:
                 pattern = image_to_pattern(str(d / SOURCE), s)
+            self._update(d, meta, step="Préparation des points", progress=35)
             stats = pattern_stats(pattern)
             if stats["stitches"] == 0:
                 off = [z for z in meta.get("zones") or [] if z["fill"] == "none" and not z.get("outline", True)]
@@ -335,10 +422,11 @@ class DesignStore:
                                        "ou un point de contour.")
                 raise InvalidImage("Aucun point à broder : l'image semble vide une fois le fond supprimé.")
 
-            self._update(d, meta, step="Écriture des fichiers de broderie")
+            self._update(d, meta, step="Écriture des fichiers de broderie", progress=50)
             opts = {"tie_on": True, "tie_off": True} if s.lock_stitches else {}
-            for fmt in FORMATS:
+            for index, fmt in enumerate(FORMATS, 1):
                 pe.write(pattern, str(d / f"pattern.{fmt}"), opts)
+                self._update(d, meta, progress=50 + round(25 * index / len(FORMATS)))
             _write_atomic(d / PATTERN_DATA, lambda p: _save_pattern(pattern, p))
             _write_atomic(d / ZONES, lambda p: _render_zone_map(pattern, p))
 
@@ -355,6 +443,7 @@ class DesignStore:
             self._update(
                 d, meta,
                 step="Rendu réaliste",
+                progress=78,
                 stats=stats,
                 threads=["#%06x" % (t.color & 0xFFFFFF) for t in pattern.threadlist],
                 thread_lengths=[round(v / 1000, 2) for v in thread_lengths_mm(pattern)],
@@ -364,13 +453,15 @@ class DesignStore:
                 zones_previous=zones,  # fichiers de broderie écrits : la retouche est acquise
                 regions_previous=regions,
                 size_mm=[round(float(x1 - x0), 1), round(float(y1 - y0), 1)],
+                optimization_report=None if meta.get("editing") else meta.get("optimization_report"),
             )
 
             fabric = meta.get("fabric", DEFAULT_FABRIC)
             _write_atomic(d / PHOTO, lambda p: render_photo_preview(pattern, p, fabric=fabric))
             _make_thumb(d)
             self._update(d, meta, status="ready", step=None, editing=False, zones_previous=None,
-                         regions_previous=None, photo_version=meta.get("photo_version", 0) + 1)
+                         regions_previous=None, progress=100,
+                         photo_version=meta.get("photo_version", 0) + 1)
         except InvalidImage as e:
             self._fail(d, meta, str(e))
         except Exception:
@@ -382,9 +473,9 @@ class DesignStore:
             meta.update(meta.pop("cross_stitch_previous", None) or {})
             self._update(d, meta, status="ready", step=None, editing=False, zones=meta.get("zones_previous"),
                          regions=meta.get("regions_previous"), zones_previous=None, regions_previous=None,
-                         edit_error=message)
+                         progress=None, edit_error=message)
         else:
-            self._update(d, meta, status="error", step=None, error=message)
+            self._update(d, meta, status="error", step=None, progress=None, error=message)
 
     # --- Tissu de l'aperçu réaliste ---
     def set_fabric(self, design_id, fabric):
@@ -394,7 +485,8 @@ class DesignStore:
             if meta.get("status") != "ready":
                 raise InvalidImage("Le motif n'est pas encore prêt.")
             req = meta.get("photo_request", 0) + 1
-            meta.update(fabric=fabric, photo_request=req, photo_rendering=True, photo_error=None)
+            meta.update(fabric=fabric, photo_request=req, photo_rendering=True, photo_progress=10,
+                        photo_error=None)
             self._write(d, meta)
         self._pool.submit(self._render_photo, d, fabric, req)
 
@@ -406,16 +498,20 @@ class DesignStore:
                 meta = self._read(d)
                 if meta.get("photo_request") != req:  # un autre tissu a été choisi entre-temps
                     return
+                meta["photo_progress"] = 75
+                self._write(d, meta)
                 os.replace(tmp, d / PHOTO)
                 _make_thumb(d)
-                meta.update(photo_rendering=False, photo_version=meta.get("photo_version", 0) + 1)
+                meta.update(photo_rendering=False, photo_progress=100,
+                            photo_version=meta.get("photo_version", 0) + 1)
                 self._write(d, meta)
         except Exception:
             log.exception("Échec du rendu réaliste pour %s", d.name)
             with self._modify_lock:
                 meta = self._read(d)
                 if meta.get("photo_request") == req:
-                    meta.update(photo_rendering=False, photo_error="Le nouveau rendu a échoué.")
+                    meta.update(photo_rendering=False, photo_progress=0,
+                                photo_error="Le nouveau rendu a échoué.")
                     self._write(d, meta)
         finally:
             tmp.unlink(missing_ok=True)
@@ -669,6 +765,13 @@ def _make_thumb(d):
         ph = ph.convert("RGB")
         ph.thumbnail((640, 640), Image.LANCZOS)
         _write_atomic(d / THUMB, lambda p: ph.save(p, "JPEG", quality=86, optimize=True))
+
+
+def _make_thumb_from(source, target):
+    with Image.open(source) as ph:
+        ph = ph.convert("RGB")
+        ph.thumbnail((640, 640), Image.LANCZOS)
+        ph.save(target, "JPEG", quality=86, optimize=True)
 
 
 def _write_atomic(path, write):

@@ -40,6 +40,14 @@ Exemple complet dans `examples/`.
 Puis ouvrir http://127.0.0.1:5000 : création de motifs (image, nombre de couleurs, suppression du fond),
 aperçus réaliste / simple, téléchargement dans tous les formats, galerie.
 Les motifs sont stockés dans `instance/designs/` (modifiable via la variable `IMG2STITCH_DATA`).
+Sur un motif classique prêt, le bouton « Optimiser le motif » nettoie les points identiques et les
+micro-points (avec un garde-fou de 25 % par séquence), limite les points piqués à 12 mm et supprime
+les coupes avant les déplacements de 2,5 mm ou moins. Les exports et aperçus sont alors régénérés.
+Cette optimisation conservatrice ne réordonne pas les objets et ne réduit pas la densité des remplissages,
+car les motifs stockés ne conservent pas toute la géométrie des zones ni les dépendances entre couches.
+La limite de 12 mm est une valeur de base, pas une certification pour une machine particulière : vérifiez
+les recommandations du fabricant et contrôlez l’aperçu avant de broder.
+Les traitements longs affichent une barre de progression.
 Dans les deux parcours, supprimer une couleur réduit les fils utilisés sans retirer de zone
 du motif : ses pixels sont réaffectés à la couleur conservée la plus proche en CIELAB.
 Seuls la transparence et les réglages de suppression du fond créent des zones non brodées.

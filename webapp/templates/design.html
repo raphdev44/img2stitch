@@ -46,7 +46,8 @@
 <div class="design-layout" id="design" data-id="{{ d.id }}" data-status="{{ d.status }}"
      data-has-raw="{{ d.has_raw | int }}" data-has-photo="{{ d.has_photo | int }}"
      data-photo-rendering="{{ d.photo_rendering | default(false) | int }}"
-     data-api="{{ url_for('web.api_get', design_id=d.id) }}">
+     data-api="{{ url_for('web.api_get', design_id=d.id) }}"
+     data-optimize="{{ url_for('web.api_optimize', design_id=d.id) }}">
   <section class="card stage-card">
     <div class="stage-toolbar">
       <div class="segmented" role="tablist" aria-label="Type d'aperçu">
@@ -79,14 +80,22 @@
         <span class="spinner big"></span>
         <strong>Nouveau rendu réaliste…</strong>
         <small>Le fil est posé sur le nouveau tissu, cela prend quelques secondes.</small>
+        <progress class="task-progress" id="photo-progress-bar" max="100" aria-label="Progression du rendu"></progress>
       </div>
       {% if d.status == 'processing' %}
       <div class="stage-progress">
         <span class="spinner big"></span>
         <strong id="step">{{ d.step or 'Génération' }}…</strong>
         <small>{{ 'Le rendu réaliste peut prendre quelques secondes.' if d.has_raw else "Conversion de l'image en points de broderie." }}</small>
+        <progress class="task-progress" id="processing-progress" max="100" {% if d.progress and d.progress > 5 %}value="{{ d.progress }}"{% endif %} aria-label="Progression du traitement"></progress>
       </div>
       {% endif %}
+      <div class="stage-progress" id="optimize-progress" hidden>
+        <span class="spinner big"></span>
+        <strong id="optimize-step">Optimisation du motif…</strong>
+        <small>Nettoyage des points, puis régénération des fichiers et aperçus.</small>
+        <progress class="task-progress" id="optimize-progress-bar" max="100" aria-label="Progression de l'optimisation"></progress>
+      </div>
     </div>
   </section>
 
@@ -105,6 +114,22 @@
         <div><dt>Changements de fil</dt><dd>{{ d.stats.color_changes }}</dd></div>
         <div><dt>Coupes</dt><dd>{{ d.stats.trims }}</dd></div>
       </dl>
+      {% if d.status == 'ready' and d.mode != 'cross_stitch' %}
+      <div class="optimize-box">
+        <button type="button" class="btn-primary" id="optimize-btn">Optimiser le motif</button>
+        <p class="hint">Supprime les doublons et micro-points, limite les points trop longs et fusionne les déplacements très courts. Faute de géométrie des zones et de dépendances entre couches, l’ordre et la densité sont conservés.</p>
+        <p class="form-error" id="optimize-error" role="alert" hidden></p>
+        {% if d.optimization_report %}
+        <p class="optimization-result" role="status">
+          Optimisation terminée : {{ d.optimization_report.removed_duplicates }} doublon{{ '' if d.optimization_report.removed_duplicates == 1 else 's' }},
+          {{ d.optimization_report.removed_micro_stitches }} micro-point{{ '' if d.optimization_report.removed_micro_stitches == 1 else 's' }} supprimé{{ '' if d.optimization_report.removed_micro_stitches == 1 else 's' }},
+          {{ d.optimization_report.merged_trims }} coupe{{ '' if d.optimization_report.merged_trims == 1 else 's' }} fusionnée{{ '' if d.optimization_report.merged_trims == 1 else 's' }}.
+          Points : {{ d.optimization_report.before.stitches }} → {{ d.optimization_report.after.stitches }} ;
+          coupes : {{ d.optimization_report.before.trims }} → {{ d.optimization_report.after.trims }}.
+        </p>
+        {% endif %}
+      </div>
+      {% endif %}
       <h3>Fils</h3>
       {% set editable = d.status == 'ready' %}
       <ol class="threads" id="threads" data-recolor="{{ url_for('web.api_recolor', design_id=d.id) }}"

@@ -79,6 +79,10 @@
       <span class="btn-label">Générer le motif</span>
       <span class="spinner" aria-hidden="true"></span>
     </button>
+    <div class="inline-progress" id="create-progress" role="status" aria-live="polite" hidden>
+      <span>Génération du motif en cours…</span>
+      <progress class="task-progress" aria-label="Génération du motif en cours"></progress>
+    </div>
   </div>
 </form>
 {% endblock %}

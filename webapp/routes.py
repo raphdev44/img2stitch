@@ -27,7 +27,8 @@ def _file_url(meta, name):
 def _public(meta):
     out = {k: meta.get(k) for k in ("id", "name", "created_at", "n_colors", "background", "target_mm",
                                      "status", "step", "error", "stats", "threads", "size_mm", "fabric",
-                                     "photo_error", "edit_error", "mode", "grid", "cross_stitch_color_limit")}
+                                     "photo_error", "photo_progress", "edit_error", "mode", "grid",
+                                     "cross_stitch_color_limit", "progress", "optimization_report")}
     out["photo_rendering"] = bool(meta.get("photo_rendering"))
     out["urls"] = {
         "page": url_for("web.design", design_id=meta["id"]),
@@ -134,6 +135,17 @@ def api_delete(design_id):
     except InvalidImage as e:
         return jsonify(error=str(e)), 409
     return "", 204
+
+
+@bp.post("/api/motifs/<design_id>/optimiser")
+def api_optimize(design_id):
+    if store().get(design_id) is None:
+        abort(404)
+    try:
+        store().optimize(design_id)
+    except InvalidImage as exc:
+        return jsonify(error=str(exc)), 409
+    return jsonify(_public(store().get(design_id))), 202
 
 
 @bp.get("/motifs/<design_id>")

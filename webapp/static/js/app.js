@@ -2,6 +2,14 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
   const page = document.body.dataset.page;
+  const setTaskProgress = (bar, value, step = "") => {
+    if (!bar) return;
+    if (/Analyse|Préparation des points|Nettoyage des points|Application des modifications/.test(step)) {
+      bar.removeAttribute("value");
+    } else if (Number.isFinite(value)) {
+      bar.value = value;
+    }
+  };
 
   function setupStageNavigation(stage, getContent, fitButton) {
     let scale = 1, fitScale = 1, offsetX = 0, offsetY = 0;
@@ -328,6 +336,7 @@
       btn.disabled = true;
       btn.classList.add("loading");
       $(".btn-label", btn).textContent = "Envoi…";
+      $("#create-progress").hidden = false;
       const data = new FormData();
       data.append("image", file);
       data.append("colors", range.value);
@@ -348,6 +357,7 @@
         showError(ex.message);
         btn.disabled = false;
         btn.classList.remove("loading");
+        $("#create-progress").hidden = true;
         $(".btn-label", btn).textContent = page === "cross-stitch" ? "Générer le point de croix" : "Générer le motif";
       }
     });
@@ -415,10 +425,48 @@
           if (changed) return window.location.reload();
           const step = $("#step");
           if (step && d.step) step.textContent = `${d.step}…`;
+          setTaskProgress($("#processing-progress"), d.progress, d.step);
         } catch { /* réseau indisponible : on réessaie */ }
         setTimeout(poll, 1500);
       };
       setTimeout(poll, 1500);
+    }
+
+    const optimizeButton = $("#optimize-btn");
+    if (optimizeButton) {
+      const progress = $("#optimize-progress");
+      const bar = $("#optimize-progress-bar");
+      const step = $("#optimize-step");
+      const pollOptimization = async () => {
+        try {
+          const res = await fetch(root.dataset.api, { cache: "no-store" });
+          const d = await res.json();
+          if (d.status !== "processing") return window.location.reload();
+          setTaskProgress(bar, d.progress, d.step);
+          if (d.step) step.textContent = `${d.step}…`;
+        } catch { /* réseau indisponible : on réessaie */ }
+        setTimeout(pollOptimization, 1200);
+      };
+      optimizeButton.addEventListener("click", async () => {
+        optimizeButton.disabled = true;
+        optimizeButton.classList.add("loading");
+        progress.hidden = false;
+        try {
+          const res = await fetch(root.dataset.optimize, { method: "POST" });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(json.error || "L'optimisation n'a pas pu démarrer.");
+          setTaskProgress(bar, json.progress, json.step);
+          if (json.step) step.textContent = `${json.step}…`;
+          setTimeout(pollOptimization, 800);
+        } catch (ex) {
+          progress.hidden = true;
+          optimizeButton.disabled = false;
+          optimizeButton.classList.remove("loading");
+          const error = $("#optimize-error");
+          error.textContent = ex.message;
+          error.hidden = false;
+        }
+      });
     }
 
     // Choix du tissu : regénère l'aperçu réaliste côté serveur puis remplace l'image
@@ -433,11 +481,17 @@
       const setBusy = (on) => {
         progress.hidden = !on;
         fabrics.classList.toggle("is-busy", on);
+        if (on) $("#photo-progress-bar").removeAttribute("value");
       };
       const waitPhoto = async () => {
         try {
           const d = await (await fetch(root.dataset.api, { cache: "no-store" })).json();
-          if (d.photo_rendering) return setTimeout(waitPhoto, 1000);
+          const bar = $("#photo-progress-bar");
+          if (d.photo_rendering) {
+            if (bar) bar.removeAttribute("value");
+            return setTimeout(waitPhoto, 1000);
+          }
+          if (bar && Number.isFinite(d.photo_progress)) bar.value = d.photo_progress;
           select(d.fabric);
           current = d.fabric;
           if (d.photo_error || !d.urls.photo) return setBusy(false);
@@ -889,6 +943,7 @@
             const d = await (await fetch(root.dataset.status, { cache: "no-store" })).json();
             if (d.status === "processing") {
               if (loadingStep) loadingStep.textContent = d.step ? `${d.step}…` : "";
+              setTaskProgress($("#editor-progress"), d.progress, d.step);
               return setTimeout(wait, 1200);
             }
             window.location.reload();
