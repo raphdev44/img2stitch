@@ -45,7 +45,9 @@ def test_only_merges_trim_before_short_jump():
 
     assert report["merged_trims"] == 1
     assert sum(s[2] & pe.COMMAND_MASK == pe.TRIM for s in optimized.stitches) == 1
-    assert optimized.stitches[1][2] == pe.JUMP
+    assert optimized.stitches[1] == [20, 0, pe.STITCH]
+    assert optimized.stitches[2][2] == pe.TRIM
+    assert optimized.stitches[3][2] == pe.JUMP
 
 
 def test_does_not_merge_a_trim_across_a_color_change():
