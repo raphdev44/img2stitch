@@ -26,6 +26,8 @@ from img2stitch.convert import (SIZE_MARGIN_MM, _region_look, _zone_override, pa
 from img2stitch.cross_stitch import MAX_COLORS as CROSS_STITCH_MAX_COLORS, cross_stitch_palettes, cross_stitch_pattern
 from img2stitch.fill import FILL_TYPES
 from img2stitch.optimize import optimize_pattern
+from img2stitch.radical import optimize_pattern_radical
+from img2stitch.vectorize import VectorizerUnavailable
 from img2stitch.relief import LEGACY as RELIEF_LEGACY
 from img2stitch.smart import thin_band_regions
 from img2stitch.photo import FABRICS, stitch_bbox_mm
@@ -33,6 +35,18 @@ from img2stitch.photo import FABRICS, stitch_bbox_mm
 log = logging.getLogger(__name__)
 
 DEFAULT_FABRIC = "creme"
+
+# Algorithmes de numérisation proposés à la création : libellé affiché dans l'interface
+SCAN_ENGINES = {
+    "standard": "Standard",
+    "vector": "Par vectorisation (vpype)",
+}
+
+# Optimisations proposées sur un motif prêt : libellé affiché dans l'interface
+OPTIMIZATIONS = {
+    "simple": "Optimisation simple",
+    "radical": "Optimisation radicale",
+}
 
 FORMATS = {
     "pes": "Brother · Babylock",
@@ -51,6 +65,9 @@ PUBLIC_FILES = {SOURCE, RAW, PHOTO, THUMB, ZONES}
 MIN_COLORS, MAX_COLORS = 1, 12
 MAX_NAME = 80
 MIN_SIZE_MM, MAX_SIZE_MM, DEFAULT_SIZE_MM = 10, 400, 100
+# Les aperçus (réaliste en 22 px/mm) pèsent plusieurs Mo : sous cette marge on ne tente pas de les
+# écrire, un disque plein ferait échouer la génération après les fichiers de broderie.
+MIN_FREE_BYTES = 64 * 1024 * 1024
 MAX_PIXELS = 40_000_000
 ACCEPTED_FORMATS = {"PNG", "JPEG", "WEBP", "AVIF"}
 # mode web -> (Settings.background, Settings.background_scope)
@@ -206,32 +223,75 @@ class DesignStore:
             self._write(d, meta)
         self._pool.submit(self._generate, d)
 
-    def optimize(self, design_id):
-        d = self.dir(design_id)
+    def optimize(self, design_id, mode="simple"):
+        """Optimise une **copie** du motif ; l'original reste intact.
+
+        Le dossier du motif est dupliqué (nouvel identifiant, nouveau nom « … - optimisé » ou
+        « … - optimisé+ ») puis la copie est optimisée en tâche de fond. Retourne l'identifiant
+        du nouveau motif.
+        """
+        if mode not in OPTIMIZATIONS:
+            raise InvalidImage("Optimisation inconnue : choisissez l'optimisation simple ou radicale.")
+        source = self.dir(design_id)
+        if source is None:
+            raise InvalidImage("Motif introuvable.")
         with self._modify_lock:
-            meta = self._read(d)
+            meta = self._read(source)
             if meta.get("mode") == "cross_stitch":
                 raise InvalidImage("L'optimisation est réservée aux motifs de broderie classiques.")
             if meta.get("status") != "ready" or meta.get("photo_rendering"):
                 raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
-            meta.update(
-                editing=True,
+            copy_id = uuid.uuid4().hex
+            target = self.root / copy_id
+            try:
+                shutil.copytree(source, target)
+            except OSError:
+                log.exception("Copie du motif %s impossible", design_id)
+                shutil.rmtree(target, ignore_errors=True)
+                raise InvalidImage("La copie du motif a échoué, réessayez dans un instant.")
+            copy_meta = dict(meta)
+            copy_meta.update(
+                id=copy_id,
+                name=_optimized_name(meta.get("name"), mode),
+                created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                status="processing",
+                step="Réorganisation du parcours" if mode == "radical"
+                else "Nettoyage des points et déplacements",
+                progress=5,
+                editing=True,           # en cas d'échec la copie reste utilisable telle quelle
                 zones_previous=meta.get("zones"),
                 regions_previous=meta.get("regions"),
-                status="processing",
-                step="Nettoyage des points et déplacements",
-                progress=5,
+                optimization_mode=mode,
+                optimization_report=None,
+                optimized_from=design_id,
+                optimized_from_name=meta.get("name"),
+                photo_rendering=False,
+                photo_request=0,
+                photo_error=None,
                 error=None,
                 edit_error=None,
             )
-            self._write(d, meta)
-        self._pool.submit(self._optimize, d)
+            self._write(target, copy_meta)
+        self._pool.submit(self._optimize, target)
+        return copy_id
 
     def _optimize(self, d):
         meta = self._read(d)
+        mode = meta.get("optimization_mode", "simple")
         staged = []
         try:
-            pattern, report = optimize_pattern(_load_pattern(d))
+            pattern = _load_pattern(d)
+            if mode == "radical":
+                try:
+                    pattern, report = optimize_pattern_radical(pattern)
+                except Exception:
+                    log.exception("Optimisation radicale impossible pour %s, repli sur l'optimisation "
+                                  "simple", d.name)
+                    pattern, report = optimize_pattern(pattern)
+                    report["warnings"].append(
+                        "Optimisation radicale indisponible sur ce motif : optimisation simple appliquée.")
+            else:
+                pattern, report = optimize_pattern(pattern)
             self._update(d, meta, step="Préparation des fichiers machine", progress=35)
             stats = pattern_stats(pattern)
             x0, y0, x1, y1 = stitch_bbox_mm(pattern)
@@ -244,8 +304,18 @@ class DesignStore:
             _save_pattern(pattern, str(data_path))
             _render_zone_map(pattern, str(zones_path))
             render_raw_preview(pattern, str(raw_path))
-            render_photo_preview(pattern, str(photo_path), fabric=meta.get("fabric", DEFAULT_FABRIC))
-            _make_thumb_from(photo_path, thumb_path)
+            photo_error = None
+            if _has_room_for_preview(d):
+                try:
+                    render_photo_preview(pattern, str(photo_path),
+                                         fabric=meta.get("fabric", DEFAULT_FABRIC))
+                    _make_thumb_from(photo_path, thumb_path)
+                except OSError:
+                    log.warning("Rendu réaliste impossible pour %s", d.name, exc_info=True)
+                    photo_error = _write_error(d)
+            else:
+                log.warning("Aperçu réaliste ignoré pour %s : espace disque insuffisant", d.name)
+                photo_error = _write_error(d)
             for index, fmt in enumerate(FORMATS, 1):
                 path = d / f".optimized.tmp.{fmt}"
                 staged.append(path)
@@ -257,12 +327,13 @@ class DesignStore:
                 (data_path, d / PATTERN_DATA),
                 (zones_path, d / ZONES),
                 (raw_path, d / RAW),
-                (photo_path, d / PHOTO),
-                (thumb_path, d / THUMB),
             ] + [(d / f".optimized.tmp.{fmt}", d / f"pattern.{fmt}") for fmt in FORMATS]
+            if photo_error is None:     # sinon l'aperçu précédent est conservé tel quel
+                replacements += [(photo_path, d / PHOTO), (thumb_path, d / THUMB)]
             for source, target in replacements:
                 os.replace(source, target)
 
+            report["mode"] = mode
             report["after"]["colors"] = len(pattern.threadlist)
             report["after"]["stats"] = stats
             report["before"]["stats"] = meta.get("stats")
@@ -280,8 +351,13 @@ class DesignStore:
                 size_mm=[round(float(x1 - x0), 1), round(float(y1 - y0), 1)],
                 photo_version=meta.get("photo_version", 0) + 1,
                 optimization_report=report,
+                optimization_mode=mode,
+                photo_error=photo_error,
                 edit_error=None,
             )
+        except OSError:
+            log.exception("Échec d'écriture pendant l'optimisation de %s", d.name)
+            self._fail(d, meta, _write_error(d))
         except Exception:
             log.exception("Échec de l'optimisation pour %s", d.name)
             self._fail(d, meta, "L'optimisation du motif a échoué.")
@@ -363,7 +439,9 @@ class DesignStore:
 
     # --- Création ---
     def create(self, stream, filename, n_colors, background, target_mm, excluded=(), thicken_lines=False,
-               *, smart_fill=False, mode="classic"):
+               *, smart_fill=False, mode="classic", engine="standard"):
+        if engine not in SCAN_ENGINES:
+            raise InvalidImage("Algorithme de numérisation inconnu.")
         img = _load_image(stream)
         design_id = uuid.uuid4().hex
         d = self.root / design_id
@@ -382,6 +460,7 @@ class DesignStore:
             "excluded": list(excluded),
             "thicken_lines": bool(thicken_lines),
             "smart_fill": bool(smart_fill),
+            "engine": engine,
             "fabric": DEFAULT_FABRIC,
             "status": "processing",
             "step": "Analyse de l'image",
@@ -457,13 +536,28 @@ class DesignStore:
             )
 
             fabric = meta.get("fabric", DEFAULT_FABRIC)
-            _write_atomic(d / PHOTO, lambda p: render_photo_preview(pattern, p, fabric=fabric))
-            _make_thumb(d)
+            photo_error = None
+            if _has_room_for_preview(d):
+                try:
+                    _write_atomic(d / PHOTO, lambda p: render_photo_preview(pattern, p, fabric=fabric))
+                    _make_thumb(d)
+                except OSError:
+                    # L'aperçu réaliste est décoratif : sans lui le motif reste brodable et téléchargeable.
+                    log.warning("Rendu réaliste impossible pour %s", d.name, exc_info=True)
+                    photo_error = _write_error(d)
+            else:
+                log.warning("Aperçu réaliste ignoré pour %s : espace disque insuffisant", d.name)
+                photo_error = _write_error(d)
             self._update(d, meta, status="ready", step=None, editing=False, zones_previous=None,
-                         regions_previous=None, progress=100,
+                         regions_previous=None, progress=100, photo_error=photo_error,
                          photo_version=meta.get("photo_version", 0) + 1)
         except InvalidImage as e:
             self._fail(d, meta, str(e))
+        except VectorizerUnavailable as e:
+            self._fail(d, meta, str(e))
+        except OSError:
+            log.exception("Échec d'écriture pour %s", d.name)
+            self._fail(d, meta, _write_error(d))
         except Exception:
             log.exception("Échec de génération pour %s", d.name)
             self._fail(d, meta, "La génération du motif a échoué.")
@@ -505,13 +599,13 @@ class DesignStore:
                 meta.update(photo_rendering=False, photo_progress=100,
                             photo_version=meta.get("photo_version", 0) + 1)
                 self._write(d, meta)
-        except Exception:
+        except Exception as exc:
             log.exception("Échec du rendu réaliste pour %s", d.name)
+            message = _write_error(d) if isinstance(exc, OSError) else "Le nouveau rendu a échoué."
             with self._modify_lock:
                 meta = self._read(d)
                 if meta.get("photo_request") == req:
-                    meta.update(photo_rendering=False, photo_progress=0,
-                                photo_error="Le nouveau rendu a échoué.")
+                    meta.update(photo_rendering=False, photo_progress=0, photo_error=message)
                     self._write(d, meta)
         finally:
             tmp.unlink(missing_ok=True)
@@ -545,6 +639,13 @@ class DesignStore:
 
 
 _HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _optimized_name(name, mode):
+    """Nom de la copie optimisée : suffixe explicite, longueur maximale respectée."""
+    suffix = " - optimisé+" if mode == "radical" else " - optimisé"
+    base = " ".join(str(name or "Motif").split())[:MAX_NAME - len(suffix)].strip()
+    return (base or "Motif") + suffix
 
 
 def clean_name(raw):
@@ -633,6 +734,7 @@ def _settings(meta):
     return Settings(n_colors=meta["n_colors"], background=bg, background_scope=scope,
                     max_width_mm=max_w, max_height_mm=max_h, **same_frame,
                     exclude_colors=_exclude_setting(meta.get("excluded", [])),
+                    engine=meta.get("engine", "standard"),
                     thicken_lines=bool(meta.get("thicken_lines")),
                     zone_overrides=_zone_setting(meta.get("zones") or []),
                     # Une zone restée de la couleur de sa forme suit la palette réellement générée :
@@ -774,18 +876,43 @@ def _make_thumb_from(source, target):
         ph.save(target, "JPEG", quality=86, optimize=True)
 
 
+def _free_bytes(path):
+    try:
+        return shutil.disk_usage(str(path)).free
+    except OSError:
+        return None
+
+
+def _has_room_for_preview(path):
+    free = _free_bytes(path)
+    return free is None or free >= MIN_FREE_BYTES
+
+
+def _write_error(path):
+    """Message utilisateur pour un échec d'écriture, avec la cause probable quand le disque est plein."""
+    free = _free_bytes(path)
+    if free is not None and free < MIN_FREE_BYTES:
+        return ("Espace disque insuffisant (%d Mo libres) : libérez de l'espace puis relancez la "
+                "génération." % max(0, free // (1024 * 1024)))
+    return "Les fichiers du motif n'ont pas pu être écrits sur le disque."
+
+
 def _write_atomic(path, write):
     """Écrit via un fichier temporaire puis renomme : le fichier final n'existe jamais à moitié écrit."""
     tmp = path.with_name(f"{path.stem}.tmp{path.suffix}")
-    write(str(tmp))
-    for attempt in range(20):
-        try:
-            os.replace(tmp, path)
-            return
-        except PermissionError:  # Windows : fichier en cours de lecture (navigateur, téléchargement)
-            if attempt == 19:
-                raise
-            time.sleep(0.15)
+    try:
+        write(str(tmp))
+        for attempt in range(20):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:  # Windows : fichier en cours de lecture (navigateur, téléchargement)
+                if attempt == 19:
+                    raise
+                time.sleep(0.15)
+    except OSError:
+        tmp.unlink(missing_ok=True)     # un temporaire à moitié écrit ne doit pas traîner
+        raise
 
 
 def _load_image(stream):

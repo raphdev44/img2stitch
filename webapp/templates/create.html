@@ -61,6 +61,21 @@
 
     <details class="advanced-options">
       <summary>Options avancées</summary>
+      <label class="select-field">
+        <span>Algorithme de numérisation</span>
+        <select id="scan-engine" name="engine">
+          {% for value, label in engines.items() %}
+          <option value="{{ value }}"{% if value == 'standard' %} selected{% endif %}
+                  {% if value == 'vector' and not vector_ready %}disabled{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <small class="hint">
+          Standard : contours suivis au pixel, remplissage rangée par rangée.
+          Par vectorisation : contours lissés et compensés (tension du fil), sous-couche de stabilisation
+          et remplissage vectoriel — plus régulier sur les formes courbes, un peu plus de points{% if not vector_ready %}
+          (indisponible : paquet « shapely » manquant){% endif %}.
+        </small>
+      </label>
       <label class="choice">
         <input type="checkbox" id="thicken-lines">
         <span><strong>Épaissir les lignes trop fines</strong>

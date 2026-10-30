@@ -3,9 +3,11 @@ from datetime import datetime
 from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, send_file, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
+from img2stitch.vectorize import available as vectorize_available
+
 from .designs import (BACKGROUND_MODES, CROSS_STITCH_MAX_COLORS, DEFAULT_SIZE_MM, FABRICS, FILL_TYPES, FORMATS, MAX_COLORS, MAX_SIZE_MM,
-                      MIN_COLORS, MIN_SIZE_MM, ZONES, InvalidImage, analyse_cross_stitch_image, analyse_image, clean_name, export_filename,
-                      parse_edits, parse_exclusions)
+                      MIN_COLORS, MIN_SIZE_MM, SCAN_ENGINES, ZONES, InvalidImage, analyse_cross_stitch_image, analyse_image,
+                      clean_name, export_filename, parse_edits, parse_exclusions)
 from .designs import _HEX_RE as HEX_RE
 
 bp = Blueprint("web", __name__)
@@ -27,8 +29,9 @@ def _file_url(meta, name):
 def _public(meta):
     out = {k: meta.get(k) for k in ("id", "name", "created_at", "n_colors", "background", "target_mm",
                                      "status", "step", "error", "stats", "threads", "size_mm", "fabric",
-                                     "photo_error", "photo_progress", "edit_error", "mode", "grid",
-                                     "cross_stitch_color_limit", "progress", "optimization_report")}
+                                     "photo_error", "photo_progress", "edit_error", "mode", "grid", "engine",
+                                     "cross_stitch_color_limit", "progress", "optimization_report",
+                                     "optimization_mode", "optimized_from", "optimized_from_name")}
     out["photo_rendering"] = bool(meta.get("photo_rendering"))
     out["urls"] = {
         "page": url_for("web.design", design_id=meta["id"]),
@@ -49,7 +52,8 @@ def datefr(value):
 @bp.get("/")
 def create():
     return render_template("create.html", min_colors=MIN_COLORS, max_colors=MAX_COLORS,
-                           min_size=MIN_SIZE_MM, max_size=MAX_SIZE_MM, default_size=DEFAULT_SIZE_MM)
+                           min_size=MIN_SIZE_MM, max_size=MAX_SIZE_MM, default_size=DEFAULT_SIZE_MM,
+                           engines=SCAN_ENGINES, vector_ready=vectorize_available())
 
 
 @bp.get("/galerie")
@@ -141,11 +145,14 @@ def api_delete(design_id):
 def api_optimize(design_id):
     if store().get(design_id) is None:
         abort(404)
+    body = request.get_json(silent=True) or {}
+    # Sans précision (ancien client, formulaire vide) : l'optimisation prudente d'origine
+    mode = body.get("mode", "simple") if isinstance(body, dict) else "simple"
     try:
-        store().optimize(design_id)
+        optimized_id = store().optimize(design_id, mode)
     except InvalidImage as exc:
         return jsonify(error=str(exc)), 409
-    return jsonify(_public(store().get(design_id))), 202
+    return jsonify(_public(store().get(optimized_id))), 202
 
 
 @bp.get("/motifs/<design_id>")
@@ -200,12 +207,15 @@ def api_create():
         return jsonify(error="Dimensions invalides."), 400
     if not all(MIN_SIZE_MM <= v <= MAX_SIZE_MM for v in target):
         return jsonify(error=f"La largeur et la hauteur doivent être comprises entre {MIN_SIZE_MM} et {MAX_SIZE_MM} mm."), 400
+    engine = request.form.get("engine", "standard")
+    if engine not in SCAN_ENGINES:
+        return jsonify(error="Algorithme de numérisation inconnu."), 400
     try:
         excluded = parse_exclusions(request.form.get("exclude"))
         thicken_lines = request.form.get("thicken_lines") == "true"
         smart_fill = request.form.get("smart_fill") == "true"
         design_id = store().create(f.stream, f.filename, n_colors, background, target, excluded, thicken_lines,
-                                   smart_fill=smart_fill)
+                                   smart_fill=smart_fill, engine=engine)
     except InvalidImage as e:
         return jsonify(error=str(e)), 400
     return jsonify(_public(store().get(design_id))), 202

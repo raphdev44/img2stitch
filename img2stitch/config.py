@@ -24,6 +24,15 @@ class Settings:
     center_on_origin: bool = True   # centre le motif sur (0,0) = centre du cerceau, comme l'attendent les machines
     stagger: bool = True            # décale les points d'une rangée à l'autre (aspect "brique", plus régulier)
 
+    # --- Numérisation ---
+    # "standard" : masques de pixels remplis rangée par rangée (moteur historique).
+    # "vector"   : contours vectorisés (Shapely) + sous-couche + remplissage vectoriel.
+    engine: str = "standard"
+
+    def __post_init__(self):
+        if self.engine not in ("standard", "vector"):
+            raise ValueError("engine doit être 'standard' ou 'vector'")
+
     # --- Chevauchement et contours ---
     overlap_mm: float = 0.4         # une couleur déborde de ce montant SOUS les couleurs posées après elle
     outline: bool = True            # piquer un contour par-dessus chaque zone

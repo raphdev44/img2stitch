@@ -4,7 +4,7 @@
   const page = document.body.dataset.page;
   const setTaskProgress = (bar, value, step = "") => {
     if (!bar) return;
-    if (/Analyse|Préparation des points|Nettoyage des points|Application des modifications/.test(step)) {
+    if (/Analyse|Préparation des points|Nettoyage des points|Réorganisation du parcours|Application des modifications/.test(step)) {
       bar.removeAttribute("value");
     } else if (Number.isFinite(value)) {
       bar.value = value;
@@ -347,6 +347,7 @@
         data.append("height_mm", sizeInputs[1].value);
         data.append("thicken_lines", $("#thicken-lines").checked ? "true" : "false");
         data.append("smart_fill", $("#smart-fill").checked ? "true" : "false");
+        data.append("engine", $("#scan-engine").value);
       }
       try {
         const res = await fetch(form.action, { method: "POST", body: data });
@@ -432,41 +433,62 @@
       setTimeout(poll, 1500);
     }
 
-    const optimizeButton = $("#optimize-btn");
-    if (optimizeButton) {
+    // Optimisation : un seul bouton, menu de choix simple / radical. Chaque choix duplique le
+    // motif ; on bascule sur la copie optimisée (l'original reste dans la galerie).
+    const optimizeBox = $("#optimize-picker");
+    if (optimizeBox) {
+      const toggle = $("#optimize-toggle");
+      const menu = $("#optimize-menu");
+      const options = $$(".optimize-option", menu);
       const progress = $("#optimize-progress");
       const bar = $("#optimize-progress-bar");
       const step = $("#optimize-step");
-      const pollOptimization = async () => {
-        try {
-          const res = await fetch(root.dataset.api, { cache: "no-store" });
-          const d = await res.json();
-          if (d.status !== "processing") return window.location.reload();
-          setTaskProgress(bar, d.progress, d.step);
-          if (d.step) step.textContent = `${d.step}…`;
-        } catch { /* réseau indisponible : on réessaie */ }
-        setTimeout(pollOptimization, 1200);
+      const error = $("#optimize-error");
+
+      const setOpen = (open) => {
+        menu.hidden = !open;
+        toggle.setAttribute("aria-expanded", String(open));
+        if (open) options[0]?.focus();
       };
-      optimizeButton.addEventListener("click", async () => {
-        optimizeButton.disabled = true;
-        optimizeButton.classList.add("loading");
-        progress.hidden = false;
+      toggle.addEventListener("click", () => setOpen(menu.hidden));
+      toggle.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); }
+      });
+      document.addEventListener("click", (e) => {
+        if (!menu.hidden && !optimizeBox.contains(e.target)) setOpen(false);
+      });
+      optimizeBox.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !menu.hidden) { setOpen(false); toggle.focus(); }
+      });
+
+      const setBusy = (busy) => {
+        options.forEach((button) => { button.disabled = busy; });
+        toggle.disabled = busy;
+        toggle.classList.toggle("loading", busy);
+        progress.hidden = !busy;
+        if (busy) bar.removeAttribute("value");
+      };
+      options.forEach((button) => button.addEventListener("click", async () => {
+        const mode = button.dataset.mode || "simple";
+        setOpen(false);
+        error.hidden = true;
+        setBusy(true);
+        step.textContent = "Création de la copie optimisée…";
         try {
-          const res = await fetch(root.dataset.optimize, { method: "POST" });
+          const res = await fetch(root.dataset.optimize, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode }),
+          });
           const json = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(json.error || "L'optimisation n'a pas pu démarrer.");
-          setTaskProgress(bar, json.progress, json.step);
-          if (json.step) step.textContent = `${json.step}…`;
-          setTimeout(pollOptimization, 800);
+          window.location.assign(json.urls?.page || root.dataset.api);
         } catch (ex) {
-          progress.hidden = true;
-          optimizeButton.disabled = false;
-          optimizeButton.classList.remove("loading");
-          const error = $("#optimize-error");
+          setBusy(false);
           error.textContent = ex.message;
           error.hidden = false;
         }
-      });
+      }));
     }
 
     // Choix du tissu : regénère l'aperçu réaliste côté serveur puis remplace l'image

@@ -188,5 +188,8 @@ def render_photo_preview(pattern, path, px_per_mm=22, thread_mm=0.42, fabric="cr
     out += rng.normal(0, 0.008, out.shape).astype(np.float32)        # grain
     out = cv2.GaussianBlur(out, (0, 0), 0.5)
     img = (np.clip(out, 0, 1) * 255).astype(np.uint8)
-    cv2.imwrite(path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+    if not cv2.imwrite(path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR)):
+        # cv2.imwrite ne lève pas d'exception : sans ce contrôle un disque plein se traduit plus loin
+        # par une erreur de fichier introuvable, incompréhensible pour l'utilisateur.
+        raise OSError("écriture de l'aperçu réaliste impossible : %s" % path)
     return path

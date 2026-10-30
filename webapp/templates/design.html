@@ -17,7 +17,7 @@
       </form>
     </div>
     <p class="form-error" id="title-error" role="alert" hidden></p>
-    <p class="muted">{{ d.created_at | datefr }} · {% if d.mode == 'cross_stitch' %}Pixel art · Point de croix{% if d.n_colors %} · {{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }}{% endif %}{% else %}{{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }} demandée{{ 's' if d.n_colors > 1 }}{% endif %} · {{ bg_labels[d.background] }}{% if d.target_mm %} · cadre {{ '%g' % d.target_mm[0] }} × {{ '%g' % d.target_mm[1] }} mm{% endif %}</p>
+    <p class="muted">{{ d.created_at | datefr }} · {% if d.mode == 'cross_stitch' %}Pixel art · Point de croix{% if d.n_colors %} · {{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }}{% endif %}{% else %}{{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }} demandée{{ 's' if d.n_colors > 1 }}{% endif %} · {{ bg_labels[d.background] }}{% if d.target_mm %} · cadre {{ '%g' % d.target_mm[0] }} × {{ '%g' % d.target_mm[1] }} mm{% endif %}{% if d.engine == 'vector' %} · numérisation par vectorisation{% endif %}</p>
   </div>
   <div class="head-actions">
     {% if d.status == 'ready' %}
@@ -31,6 +31,22 @@
     {% else %}<span class="badge busy">En cours</span>{% endif %}
   </div>
 </div>
+
+{% if d.optimized_from and d.status == 'ready' %}
+  <div class="card notice">
+    <strong>Copie optimisée</strong>{% if d.optimization_mode == 'radical' %} (optimisation radicale){% endif %} de
+    <a href="{{ url_for('web.design', design_id=d.optimized_from) }}">« {{ d.optimized_from_name or 'motif d\'origine' }} »</a>.
+    <p class="hint">L’original n’a pas été modifié : les deux motifs sont visibles dans la galerie.</p>
+  </div>
+{% endif %}
+
+{% if d.status == 'ready' and d.photo_error %}
+  <div class="card notice err">
+    <strong>Le rendu réaliste n'a pas pu être créé ou mis à jour.</strong>
+    <p>{{ d.photo_error }}</p>
+    <p class="hint">L'aperçu simple et les fichiers de broderie restent disponibles.</p>
+  </div>
+{% endif %}
 
 {% if d.status == 'ready' and d.edit_error %}
   <div class="card notice err"><strong>Les dernières modifications n'ont pas pu être appliquées.</strong><p>{{ d.edit_error }}</p></div>
@@ -93,7 +109,7 @@
       <div class="stage-progress" id="optimize-progress" hidden>
         <span class="spinner big"></span>
         <strong id="optimize-step">Optimisation du motif…</strong>
-        <small>Nettoyage des points, puis régénération des fichiers et aperçus.</small>
+        <small>Duplication du motif, optimisation du parcours, puis régénération des fichiers et aperçus.</small>
         <progress class="task-progress" id="optimize-progress-bar" max="100" aria-label="Progression de l'optimisation"></progress>
       </div>
     </div>
@@ -116,17 +132,46 @@
       </dl>
       {% if d.status == 'ready' and d.mode != 'cross_stitch' %}
       <div class="optimize-box">
-        <button type="button" class="btn-primary" id="optimize-btn">Optimiser le motif</button>
-        <p class="hint">Supprime les doublons et micro-points, limite les points trop longs et fusionne les déplacements très courts. Faute de géométrie des zones et de dépendances entre couches, l’ordre et la densité sont conservés.</p>
+        <div class="optimize-picker" id="optimize-picker">
+          <button type="button" class="btn-primary" id="optimize-toggle" aria-haspopup="true"
+                  aria-expanded="false" aria-controls="optimize-menu">
+            Optimiser le motif
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="optimize-menu" id="optimize-menu" role="menu" aria-labelledby="optimize-toggle" hidden>
+            <button type="button" role="menuitem" class="optimize-option" id="optimize-btn" data-mode="simple">
+              <strong>Optimisation simple</strong>
+              <span>Nettoyage prudent des points (doublons, micro-points, points trop longs). L’ordre des couleurs et la densité sont conservés.</span>
+            </button>
+            <button type="button" role="menuitem" class="optimize-option" id="optimize-radical-btn" data-mode="radical">
+              <strong>Optimisation radicale</strong>
+              <span>Réorganise tout le parcours : blocs d’un même fil réunis, passages enchaînés au plus court, déplacements courts ou cachés piqués, points recouverts retirés. L’aspect est contrôlé, mais l’ordre des couleurs peut changer : vérifiez l’aperçu.</span>
+            </button>
+          </div>
+        </div>
+        <p class="hint optimize-copy">Crée une copie optimisée du motif (« nom - optimisé » ou « nom - optimisé+ ») : l’original reste inchangé dans la galerie.</p>
         <p class="form-error" id="optimize-error" role="alert" hidden></p>
         {% if d.optimization_report %}
+        {% set r = d.optimization_report %}
         <p class="optimization-result" role="status">
-          Optimisation terminée : {{ d.optimization_report.removed_duplicates }} doublon{{ '' if d.optimization_report.removed_duplicates == 1 else 's' }},
-          {{ d.optimization_report.removed_micro_stitches }} micro-point{{ '' if d.optimization_report.removed_micro_stitches == 1 else 's' }} supprimé{{ '' if d.optimization_report.removed_micro_stitches == 1 else 's' }},
-          {{ d.optimization_report.merged_trims }} coupe{{ '' if d.optimization_report.merged_trims == 1 else 's' }} fusionnée{{ '' if d.optimization_report.merged_trims == 1 else 's' }}.
-          Points : {{ d.optimization_report.before.stitches }} → {{ d.optimization_report.after.stitches }} ;
-          coupes : {{ d.optimization_report.before.trims }} → {{ d.optimization_report.after.trims }}.
+          <strong>{{ 'Optimisation radicale' if r.mode == 'radical' else 'Optimisation simple' }}</strong> :
+          points {{ r.before.stitches }} → {{ r.after.stitches }},
+          coupes {{ r.before.trims }} → {{ r.after.trims }}{% if r.after.color_changes is defined %},
+          changements de fil {{ r.before.color_changes | default('–') }} → {{ r.after.color_changes }}{% endif %}.
+          {% if r.mode == 'radical' %}<br>
+          {{ r.removed_hidden_stitches }} point{{ '' if r.removed_hidden_stitches == 1 else 's' }} recouvert{{ '' if r.removed_hidden_stitches == 1 else 's' }} retiré{{ '' if r.removed_hidden_stitches == 1 else 's' }},
+          {{ r.simplified_points }} point{{ '' if r.simplified_points == 1 else 's' }} fusionné{{ '' if r.simplified_points == 1 else 's' }},
+          {{ r.hidden_travels_merged }} déplacement{{ '' if r.hidden_travels_merged == 1 else 's' }} caché{{ '' if r.hidden_travels_merged == 1 else 's' }} piqué{{ '' if r.hidden_travels_merged == 1 else 's' }}.
+          {% if r.after.est_time_min is defined %}<br>Temps machine estimé : {{ r.before.est_time_min }} → {{ r.after.est_time_min }} min.{% endif %}
+          {% else %}
+          {{ r.removed_duplicates }} doublon{{ '' if r.removed_duplicates == 1 else 's' }},
+          {{ r.removed_micro_stitches }} micro-point{{ '' if r.removed_micro_stitches == 1 else 's' }} supprimé{{ '' if r.removed_micro_stitches == 1 else 's' }},
+          {{ r.merged_trims }} coupe{{ '' if r.merged_trims == 1 else 's' }} fusionnée{{ '' if r.merged_trims == 1 else 's' }}.
+          {% endif %}
         </p>
+        {% if r.warnings %}
+        <p class="hint optimize-warning">{{ r.warnings | join(' ') }}</p>
+        {% endif %}
         {% endif %}
       </div>
       {% endif %}

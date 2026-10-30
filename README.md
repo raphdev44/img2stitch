@@ -18,6 +18,22 @@ le plus grand possible tout en tenant strictement dans ce rectangle, proportions
 `--background-scope outside` ne retire que le fond relié aux bords de l'image : les zones de la même couleur
 à l'intérieur du motif sont brodées. Par défaut (`all`), toutes les zones de la couleur du fond sont retirées.
 
+## Deux algorithmes de numérisation
+`--engine standard` (défaut) découpe l'image en masques de pixels et remplit ces masques rangée par rangée.
+`--engine vector` (option « Par vectorisation (vpype) » du formulaire) passe par une géométrie :
+
+1. contours extraits en suréchantillonnage puis simplifiés — les bords suivent les courbes au lieu de l'escalier de pixels ;
+2. **compensation de tension** (*pull compensation*, `PULL_MM`) : chaque forme est dilatée pour déborder sous le fil voisin ;
+3. **sous-couche** de stabilisation (contour intérieur piqué en longs points) sur les zones assez grandes ;
+4. remplissage vectoriel : les rangées sont coupées exactement par le bord des formes ;
+5. parcours ordonné au plus proche voisin puis inversé quand c'est plus court — l'équivalent de `linemerge` + `linesort`.
+
+Le résultat est plus régulier sur les formes courbes, au prix d'un peu plus de points. Le moteur standard
+reste le défaut. `pip install -e .[vector]` installe la dépendance (`shapely`).
+Les étapes utiles du document de spécification (vtracer + vpype) sont reproduites avec OpenCV et Shapely :
+vpype épingle `Shapely==1.8.0` (plus de wheel depuis Python 3.11) et les wheels vtracer pour Python 3.14
+plantent à l'appel — voir la docstring de `img2stitch/vectorize.py`.
+
 ## Sauts et coupes de fil
 Le parcours est optimisé pour limiter les sauts : un déplacement est piqué "à couvert" (sous une couleur
 posée plus tard) quand c'est possible, sinon c'est un saut, précédé d'une coupe (TRIM) s'il dépasse
@@ -26,8 +42,14 @@ posée plus tard) quand c'est possible, sinon c'est un saut, précédé d'une co
 
 ```python
 from img2stitch import convert, render_previews, Settings
+from img2stitch.optimize import optimize_pattern
+from img2stitch.radical import optimize_pattern_radical
+
 pattern = convert("logo.png", "logo.pes", Settings(width_mm=70, n_colors=3))
 render_previews(pattern, "apercu", fabric="marine")
+
+motif, rapport = optimize_pattern(pattern)                 # passes prudentes
+motif, rapport = optimize_pattern_radical(pattern)         # parcours réorganisé
 ```
 
 Le motif est centré sur (0,0) (centre du cerceau). Tests : `pip install pytest && pytest`.
@@ -40,11 +62,40 @@ Exemple complet dans `examples/`.
 Puis ouvrir http://127.0.0.1:5000 : création de motifs (image, nombre de couleurs, suppression du fond),
 aperçus réaliste / simple, téléchargement dans tous les formats, galerie.
 Les motifs sont stockés dans `instance/designs/` (modifiable via la variable `IMG2STITCH_DATA`).
-Sur un motif classique prêt, le bouton « Optimiser le motif » nettoie les points identiques et les
-micro-points (avec un garde-fou de 25 % par séquence), limite les points piqués à 12 mm et supprime
-les coupes avant les déplacements de 2,5 mm ou moins. Les exports et aperçus sont alors régénérés.
-Cette optimisation conservatrice ne réordonne pas les objets et ne réduit pas la densité des remplissages,
-car les motifs stockés ne conservent pas toute la géométrie des zones ni les dépendances entre couches.
+Sur un motif classique prêt, le bouton **Optimiser le motif** ouvre un menu avec deux optimisations.
+Les deux **dupliquent le motif** (même image, mêmes réglages) et n’optimisent que la copie : le motif
+d’origine reste intact dans la galerie. La copie est nommée « nom - optimisé » (simple) ou
+« nom - optimisé+ » (radicale) et l’application bascule dessus une fois la copie créée ; ses exports
+et aperçus sont propres à la version optimisée.
+
+**Optimisation simple** (conservatrice) : nettoie les points identiques et les micro-points (avec un
+garde-fou de 25 % par séquence), fusionne les points alignés, limite les points piqués à 12 mm et
+supprime les coupes avant les déplacements de 2,5 mm ou moins. L’ordre des objets et la densité des
+remplissages sont conservés.
+
+**Optimisation radicale** : réorganise en profondeur le parcours de la copie pour un usage direct en
+machine. Elle enchaîne :
+
+1. un nettoyage agressif des passages (doublons, micro-points, points alignés fusionnés par un
+   ré-échantillonnage le long du tracé, avec conservation des coins) ;
+2. la suppression des points recouverts par une couche brodée plus tard (points invisibles),
+   vérifiée passage par passage sur la couverture réellement visible ;
+3. le **réordonnancement des blocs et des passages** : blocs d’un même fil rapprochés, ordre des
+   couleurs choisi au plus court, passages d’une couleur enchaînés au plus proche voisin puis
+   améliorés par 2-opt, avec inversion du sens de piquage quand c’est plus court ;
+4. la **suppression des coupes** : les déplacements courts deviennent des sauts, et un déplacement
+   entièrement caché sous une zone brodée plus tard (ou sous le même fil) est **piqué** plutôt que
+   coupé, par morceaux de 2 mm ;
+5. un contrôle final : le rendu couleur du motif optimisé est comparé à l’original. Si la
+   réorganisation change trop l’image (superposition, géométrie), elle est annulée et seules les
+   passes de points sont gardées.
+
+Les superpositions sont préservées : deux blocs qui se recouvrent gardent leur ordre relatif. Les
+changements de fil consécutifs (arrêt opérateur) et les commandes non gérées (appliqué, sequins)
+font abandonner l’optimisation radicale plutôt que de les perdre. Les gains mesurés sur les motifs
+de test (7 motifs réels et 183 motifs importés) sont en moyenne de **−15 % de points** et **−60 % de
+coupes**, avec une image identique à moins de 0,2 %.
+
 La limite de 12 mm est une valeur de base, pas une certification pour une machine particulière : vérifiez
 les recommandations du fabricant et contrôlez l’aperçu avant de broder.
 Les traitements longs affichent une barre de progression.
