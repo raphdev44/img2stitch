@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
   <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
 </head>
-<body data-page="{% block page %}{% endblock %}">
+<body data-page="{% block page %}{% endblock %}" data-theme="{% block theme %}{% endblock %}">
   <header class="topbar">
     <a class="brand" href="{{ url_for('web.home') }}">
       <img class="brand-logo" src="{{ url_for('static', filename='img/logo.svg', v=1) }}" alt="img2stitch" width="156" height="41">
@@ -20,7 +20,7 @@
       <a href="{{ url_for('web.gallery') }}" class="{{ 'active' if ep in ('web.gallery', 'web.design', 'web.edit') }}">Galerie</a>
     </nav>
   </header>
-  <main class="container">
+  <main class="container{% if request.endpoint == 'web.home' %} home-container{% endif %}">
     {% block content %}{% endblock %}
   </main>
 </body>

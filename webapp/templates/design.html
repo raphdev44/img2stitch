@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ d.name }}{% endblock %}
 {% block page %}design{% endblock %}
+{% block theme %}{% if d.mode == 'hand' %}hand-embroidery{% elif d.mode == 'cross_stitch' %}cross-stitch{% else %}create{% endif %}{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>

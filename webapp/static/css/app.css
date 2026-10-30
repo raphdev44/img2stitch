@@ -8,6 +8,7 @@
   --accent: #ef5f3c;
   --accent-2: #d94d2c;
   --accent-soft: #fdeae3;
+  --accent-button-text: #fff;
   --brand-green: #0e9b85;   /* vert du logo : accent secondaire, jamais dominant */
   --violet: #6f5bff;        /* pastille du canal numérisation */
   --amber: #e0a020;         /* pastille du canal broderie main */
@@ -27,7 +28,42 @@
     --muted: #a19a91;
     --border: #312e2a;
     --accent-soft: #3a231d;
+    --accent-button-text: #16202b;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 30px rgba(0, 0, 0, .25);
+  }
+}
+
+/* Chaque outil reprend la couleur secondaire de son icône. Le point de croix conserve le corail. */
+body[data-theme="gallery"] {
+  --accent: #087767;
+  --accent-2: #075f53;
+  --accent-soft: #e4f5f0;
+}
+body[data-theme="create"] {
+  --accent: #5744d0;
+  --accent-2: #4533b8;
+  --accent-soft: #ece8ff;
+}
+body[data-theme="hand-embroidery"] {
+  --accent: #986000;
+  --accent-2: #774900;
+  --accent-soft: #fbeed2;
+}
+@media (prefers-color-scheme: dark) {
+  body[data-theme="gallery"] {
+    --accent: #55ceb4;
+    --accent-2: #74ddc6;
+    --accent-soft: #173a33;
+  }
+  body[data-theme="create"] {
+    --accent: #a99bff;
+    --accent-2: #c0b7ff;
+    --accent-soft: #302a4b;
+  }
+  body[data-theme="hand-embroidery"] {
+    --accent: #f1bd61;
+    --accent-2: #ffd484;
+    --accent-soft: #3b301b;
   }
 }
 
@@ -65,7 +101,7 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; colo
 .topbar nav { display: flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 999px; }
 .topbar nav a { padding: 6px 16px; border-radius: 999px; font-weight: 550; color: var(--muted); transition: .2s; }
 .topbar nav a:hover { color: var(--text); }
-.topbar nav a.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.topbar nav a.active { background: var(--accent-soft); color: var(--accent); box-shadow: var(--shadow); }
 
 .container { max-width: 1180px; margin: 0 auto; padding: clamp(24px, 4vw, 48px) clamp(16px, 4vw, 40px) 80px; }
 
@@ -81,7 +117,7 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; colo
 .btn-primary {
   display: inline-flex; align-items: center; justify-content: center; gap: 10px;
   width: 100%; padding: 14px 20px; border: 0; border-radius: 12px;
-  background: var(--accent); color: #fff; font: inherit; font-weight: 650; cursor: pointer;
+  background: var(--accent); color: var(--accent-button-text); font: inherit; font-weight: 650; cursor: pointer;
   transition: background .2s, transform .1s, opacity .2s;
 }
 .btn-primary:hover:not(:disabled) { background: var(--accent-2); }
@@ -109,40 +145,115 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; colo
 .hero { text-align: center; max-width: 640px; margin: 0 auto 36px; }
 .hero h1 { font-size: clamp(1.9rem, 4vw, 2.8rem); }
 
-/* Accueil : le titre tient sur une seule ligne tant que l'écran le permet. */
-.hero-home { max-width: 920px; }
-.hero-home h1 { position: relative; display: inline-block; white-space: nowrap; font-size: clamp(1.7rem, 4.3vw, 2.75rem); }
-@media (max-width: 760px) { .hero-home h1 { white-space: normal; } }
+/* Accueil : titre compact et tuiles illustrées, comme une porte d'entrée vers chaque outil. */
+.home-container {
+  position: relative;
+  isolation: isolate;
+  max-width: 1360px;
+  padding: 18px clamp(16px, 2.6vw, 32px) 44px;
+}
+.hero-home { max-width: 920px; margin-bottom: 20px; }
+.hero-home h1 {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+}
+@media (max-width: 560px) { .hero-home h1 { white-space: normal; } }
 .hero em { font-style: normal; color: var(--accent); }
 .hero p { color: var(--muted); font-size: 1.05rem; margin: 12px 0 0; }
 
 /* --- Accueil : les quatre canaux --- */
 .home-tiles {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 18px; max-width: 980px; margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  max-width: 1280px;
+  margin: 0 auto;
 }
 .home-tile {
-  display: flex; flex-direction: column; gap: 10px; padding: 26px 24px 22px;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: var(--shadow); transition: transform .15s, border-color .2s, box-shadow .2s;
+  position: relative;
+  isolation: isolate;
+  display: block;
+  min-width: 0;
+  height: 140px;
+  min-height: 140px;
+  padding: 13px 14px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  box-shadow: var(--shadow);
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
 }
-.home-tile:hover { transform: translateY(-2px); border-color: var(--accent); }
-.home-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.home-tile:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--tone) 45%, var(--border));
+  box-shadow: 0 8px 26px rgba(30, 20, 10, .1);
+}
+.home-tile:focus-visible { outline: 3px solid var(--tone); outline-offset: 3px; }
+.home-tile-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 64%;
+  height: 112px;
+  min-height: 0;
+}
+.home-illustration {
+  position: absolute;
+  z-index: 0;
+  right: -5px;
+  bottom: -7px;
+  display: block;
+  width: clamp(118px, 15vw, 150px);
+  height: clamp(118px, 15vw, 150px);
+  object-fit: cover;
+  pointer-events: none;
+  transition: transform .2s ease;
+}
+.home-tile:hover .home-illustration { transform: scale(1.04); }
 .home-icon {
-  width: 44px; height: 44px; display: grid; place-items: center;
-  border-radius: 12px; background: var(--accent-soft); color: var(--accent);
+  width: 28px;
+  height: 28px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .home-icon svg {
-  width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8;
+  width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8;
   stroke-linecap: round; stroke-linejoin: round;
 }
-.home-tile strong { font-size: 1.05rem; }
+.home-tile strong { font-size: 13px; line-height: 1.25; }
 /* La galerie n'est pas un canal de création : elle porte le vert du logo, les créations le corail. */
 .home-tile.is-link .home-icon,
 .home-tile.is-link .home-go { color: var(--brand-green); }
 .home-tile.is-link .home-icon { background: color-mix(in srgb, var(--brand-green) 12%, transparent); }
-.home-copy { color: var(--muted); font-size: 14px; }
-.home-go { margin-top: auto; padding-top: 12px; font-size: 13px; font-weight: 600; color: var(--accent); }
+.home-copy {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.28;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.home-go {
+  margin-top: auto;
+  padding-top: 3px;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 650;
+  color: var(--accent);
+  white-space: nowrap;
+}
 
 /* --- Charte : une couleur par canal, étincelles du titre --- */
 .hero-home em { color: var(--brand-green); }
@@ -158,6 +269,40 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; colo
 .home-tile.tone-amber { --tone: var(--amber); --tone-soft: #fbeed2; }
 .home-tile .home-icon { background: var(--tone-soft); color: var(--tone); }
 .home-tile .home-go { color: var(--tone); }
+.home-thread {
+  position: fixed;
+  z-index: -1;
+  right: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 100px;
+  overflow: visible;
+  pointer-events: none;
+}
+.home-thread path { fill: none; stroke-width: 1.2; }
+.home-thread-left { stroke: #91ded1; }
+.home-thread-right { stroke: #ff8a76; }
+@media (max-width: 760px) {
+  .home-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-tile-content { width: 64%; }
+  .home-illustration { width: clamp(112px, 20vw, 145px); height: clamp(112px, 20vw, 145px); }
+}
+@media (max-width: 520px) {
+  .home-container { padding-top: 24px; }
+  .hero-home { margin-bottom: 20px; }
+  .hero-home h1 { font-size: clamp(1.7rem, 7vw, 2.1rem); }
+  .home-tiles { grid-template-columns: 1fr; gap: 12px; }
+  .home-tile { min-height: 144px; }
+  .home-tile-content { width: min(64%, 250px); }
+  .home-illustration { width: 148px; height: 148px; }
+  .home-thread { height: 68px; }
+}
+@media (max-width: 400px) {
+  .topbar { gap: 8px; padding-inline: 10px; }
+  .brand-logo { width: 96px; }
+  .topbar nav { gap: 2px; padding: 3px; }
+  .topbar nav a { padding: 6px 9px; font-size: 13px; }
+}
 
 .create-card { display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; padding: 28px; max-width: 980px; margin: 0 auto; }
 .cross-create { max-width: none; padding: 24px 0; border-top: 1px solid var(--border); }

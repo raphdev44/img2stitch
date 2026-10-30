@@ -12,41 +12,62 @@
 
 <div class="home-tiles">
   <a class="home-tile is-link tone-green" href="{{ url_for('web.gallery') }}">
-    <span class="home-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 9h16M9 9v10M15 9v10"/></svg>
+    <span class="home-tile-content">
+      <span class="home-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 9h16M9 9v10M15 9v10"/></svg>
+      </span>
+      <strong>Galerie de motifs</strong>
+      <span class="home-copy">
+        {% if count %}Vos {{ count }} motif{{ 's' if count > 1 }} : aperçus, fils, téléchargements et optimisation.{% else %}Vos créations apparaîtront ici, avec leurs aperçus et leurs exports.{% endif %}
+      </span>
+      <span class="home-go">Ouvrir la galerie <span aria-hidden="true">→</span></span>
     </span>
-    <strong>Galerie de motifs</strong>
-    <span class="home-copy">
-      {% if count %}Vos {{ count }} motif{{ 's' if count > 1 }} : aperçus, fils, téléchargements et optimisation.{% else %}Vos créations apparaîtront ici, avec leurs aperçus et leurs exports.{% endif %}
-    </span>
-    <span class="home-go">Ouvrir la galerie →</span>
+    <img class="home-illustration" src="{{ url_for('static', filename='img/icone_gallerie.png') }}"
+         alt="" width="285" height="283">
   </a>
 
   <a class="home-tile tone-violet" href="{{ url_for('web.create') }}">
-    <span class="home-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+    <span class="home-tile-content">
+      <span class="home-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      </span>
+      <strong>Numérisation classique</strong>
+      <span class="home-copy">Un logo ou un dessin devient un motif brodé : remplissages, contours, taille au millimètre et aperçu réaliste.</span>
+      <span class="home-go">Créer un motif <span aria-hidden="true">→</span></span>
     </span>
-    <strong>Numérisation classique</strong>
-    <span class="home-copy">Un logo ou un dessin devient un motif brodé : remplissages, contours, taille au millimètre et aperçu réaliste.</span>
-    <span class="home-go">Créer un motif →</span>
+    <img class="home-illustration" src="{{ url_for('static', filename='img/icone_numeriser.png') }}"
+         alt="" width="285" height="283">
   </a>
 
   <a class="home-tile tone-coral" href="{{ url_for('web.create_cross_stitch') }}">
-    <span class="home-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19M12 3v18M3 12h18"/></svg>
+    <span class="home-tile-content">
+      <span class="home-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19M12 3v18M3 12h18"/></svg>
+      </span>
+      <strong>Pixel art en point de croix</strong>
+      <span class="home-copy">Un pixel art ou une grille devient une broderie de croix régulières de 2 mm, sans broder le quadrillage.</span>
+      <span class="home-go">Importer un pixel art <span aria-hidden="true">→</span></span>
     </span>
-    <strong>Pixel art en point de croix</strong>
-    <span class="home-copy">Un pixel art ou une grille devient une broderie de croix régulières de 2 mm, sans broder le quadrillage.</span>
-    <span class="home-go">Importer un pixel art →</span>
+    <img class="home-illustration" src="{{ url_for('static', filename='img/icone_pixel.png') }}"
+         alt="" width="285" height="283">
   </a>
 
   <a class="home-tile tone-amber" href="{{ url_for('web.create_hand') }}">
-    <span class="home-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><path d="M3 16c3-6 6 4 9-2s6 4 9-2M3 9c3-6 6 4 9-2s6 4 9-2"/></svg>
+    <span class="home-tile-content">
+      <span class="home-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M3 16c3-6 6 4 9-2s6 4 9-2M3 9c3-6 6 4 9-2s6 4 9-2"/></svg>
+      </span>
+      <strong>Broderie à la main</strong>
+      <span class="home-copy">Points de tige, chaînette, arête de poisson, nœuds : l'image est brodée comme au fil et à l'aiguille.</span>
+      <span class="home-go">Simuler une broderie main <span aria-hidden="true">→</span></span>
     </span>
-    <strong>Broderie à la main</strong>
-    <span class="home-copy">Points de tige, chaînette, arête de poisson, nœuds : l'image est brodée comme au fil et à l'aiguille.</span>
-    <span class="home-go">Simuler une broderie main →</span>
+    <img class="home-illustration" src="{{ url_for('static', filename='img/icone_main.png') }}"
+         alt="" width="285" height="283">
   </a>
 </div>
+
+<svg class="home-thread" viewBox="0 0 1400 100" preserveAspectRatio="none" aria-hidden="true">
+  <path class="home-thread-left" d="M0 65c28-8 22 35 0 35"/>
+  <path class="home-thread-right" d="M1190 100c54-10 21-72 79-68 43 2 66 66 131 19"/>
+</svg>
 {% endblock %}

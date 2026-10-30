@@ -369,6 +369,8 @@
       data.append("colors", range.value);
       data.append("background", bgValue());
       data.append("exclude", JSON.stringify(excluded));
+      const stitch = form.querySelector('input[name="stitch"]:checked');
+      if (stitch) data.append("stitch", stitch.value);
       if ($("#hand-style")) data.append("hand_style", $("#hand-style").value);
       if ($("#creativity") && !$("#creativity").disabled) data.append("creativity", $("#creativity").value);
       if (sizeInputs.length) {
