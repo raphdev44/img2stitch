@@ -4,11 +4,13 @@ from flask import Blueprint, abort, current_app, jsonify, redirect, render_templ
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from img2stitch.algorithm_vectorize import available as geometry_available
+from img2stitch.handstitch import STITCH_TYPES
 
 from .designs import (BACKGROUND_MODES, CROSS_STITCH_MAX_COLORS, DEFAULT_SIZE_MM, FABRICS, FILL_TYPES, FORMATS, MAX_COLORS, MAX_SIZE_MM,
                       MIN_COLORS, MIN_SIZE_MM, SCAN_ENGINES, ZONES, InvalidImage, analyse_cross_stitch_image, analyse_image,
                       clean_name, export_filename, parse_edits, parse_exclusions)
 from .designs import _HEX_RE as HEX_RE
+from .designs import HAND_CREATIVITY, HAND_STYLES
 
 bp = Blueprint("web", __name__)
 
@@ -31,7 +33,8 @@ def _public(meta):
                                      "status", "step", "error", "stats", "threads", "size_mm", "fabric",
                                      "photo_error", "photo_progress", "edit_error", "mode", "grid", "engine",
                                      "cross_stitch_color_limit", "progress", "optimization_report",
-                                     "optimization_mode", "optimized_from", "optimized_from_name")}
+                                     "optimization_mode", "optimized_from", "optimized_from_name",
+                                     "hand_style", "hand_creativity", "hand_mix")}
     out["photo_rendering"] = bool(meta.get("photo_rendering"))
     out["urls"] = {
         "page": url_for("web.design", design_id=meta["id"]),
@@ -50,6 +53,11 @@ def datefr(value):
 
 
 @bp.get("/")
+def home():
+    return render_template("home.html", count=len(store().list()))
+
+
+@bp.get("/numerisation")
 def create():
     return render_template("create.html", min_colors=MIN_COLORS, max_colors=MAX_COLORS,
                            min_size=MIN_SIZE_MM, max_size=MAX_SIZE_MM, default_size=DEFAULT_SIZE_MM,
@@ -64,6 +72,44 @@ def gallery():
 @bp.get("/pixel-art")
 def create_cross_stitch():
     return render_template("cross_stitch.html", min_colors=MIN_COLORS, max_colors=MAX_COLORS)
+
+
+@bp.get("/broderie-main")
+def create_hand():
+    return render_template("hand_embroidery.html", min_colors=MIN_COLORS, max_colors=MAX_COLORS,
+                           styles=HAND_STYLES, creativity=HAND_CREATIVITY)
+
+
+@bp.post("/api/broderie-main")
+def api_create_hand():
+    image = request.files.get("image")
+    if image is None or not image.filename:
+        return jsonify(error="Aucune image envoyée."), 400
+    background = request.form.get("background", "outside")
+    if background not in BACKGROUND_MODES:
+        return jsonify(error="Option d'arrière-plan invalide."), 400
+    try:
+        n_colors = int(request.form.get("colors", ""))
+    except ValueError:
+        return jsonify(error="Nombre de couleurs invalide."), 400
+    if not MIN_COLORS <= n_colors <= MAX_COLORS:
+        return jsonify(error=f"Le nombre de couleurs doit être compris entre {MIN_COLORS} et {MAX_COLORS}."), 400
+    style = request.form.get("hand_style", "auto")
+    if style not in HAND_STYLES:
+        return jsonify(error="Famille de points inconnue."), 400
+    try:
+        creativity = int(request.form.get("creativity", "3"))
+    except ValueError:
+        creativity = 0
+    if creativity not in HAND_CREATIVITY:
+        return jsonify(error="Niveau de créativité invalide."), 400
+    try:
+        design_id = store().create(image.stream, image.filename, n_colors, background, None,
+                                   excluded=parse_exclusions(request.form.get("exclude")),
+                                   mode="hand", hand_style=style, hand_creativity=creativity)
+    except InvalidImage as exc:
+        return jsonify(error=str(exc)), 400
+    return jsonify(_public(store().get(design_id))), 202
 
 
 @bp.post("/api/pixel-art/analyse")
@@ -160,13 +206,14 @@ def design(design_id):
     meta = store().get(design_id) or abort(404)
     return render_template("design.html", d=meta, formats=FORMATS, bg_labels=BG_LABELS,
                            thread_lengths=store().thread_lengths(design_id),
+                           hand_labels={key: value[0] for key, value in STITCH_TYPES.items()},
                            fabrics={k: (FABRIC_LABELS.get(k, k.capitalize()), v) for k, v in FABRICS.items()})
 
 
 @bp.get("/motifs/<design_id>/edition")
 def edit(design_id):
     meta = store().get(design_id) or abort(404)
-    if meta["status"] != "ready" or meta.get("mode") == "cross_stitch":
+    if meta["status"] != "ready" or meta.get("mode") in ("cross_stitch", "hand"):
         return redirect(url_for("web.design", design_id=design_id))
     return render_template("edit.html", d=meta, zones=store().zones(design_id), fills=FILL_TYPES)
 

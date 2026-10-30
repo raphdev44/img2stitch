@@ -1,4 +1,4 @@
-"""Remplissage intelligent : bandes fines détectées et brodées en satin tournant, sans contour."""
+"""Remplissage intelligent : bandes fines détectées et brodées en satin bombé, sans contour."""
 import io
 import time
 
@@ -31,6 +31,23 @@ def test_detects_the_band_but_not_the_disc(tmp_path):
     assert rgb[0] > 150 and max(rgb[1:]) < 80  # fil rouge, pas le fond blanc
 
 
+def test_a_thin_outline_is_a_band_even_when_it_encloses_areas(tmp_path):
+    # Le liseré d'un dessin est un réseau : il enferme des surfaces, donc il a des trous. Un trou
+    # ne dit rien de la finesse d'un brin — c'est la largeur lue sur l'axe médian qui compte.
+    im = Image.new("RGB", (300, 300), "white")
+    dr = ImageDraw.Draw(im)
+    dr.ellipse((40, 40, 200, 200), fill=(230, 200, 40))            # surface claire, large
+    dr.ellipse((40, 40, 200, 200), outline=(20, 20, 20), width=6)  # liseré fin, fermé
+    path = tmp_path / "lisere.png"
+    im.save(path)
+    regions = thin_band_regions(path, Settings(n_colors=2, background="auto",
+                                               background_scope="outside",
+                                               max_width_mm=60, max_height_mm=60), probe_px=300)
+    assert len(regions) == 1
+    _, _, rgb = regions[0]
+    assert max(rgb) < 90                       # le liseré sombre, pas la surface qu'il enferme
+
+
 def _wait(store, design_id, timeout=120):
     end = time.time() + timeout
     while time.time() < end:
@@ -59,8 +76,8 @@ def test_smart_fill_creates_satin_regions_without_outline(tmp_path, monkeypatch)
     assert meta["status"] == "ready", meta.get("error")
     assert meta["smart_fill"] is True
     assert meta["regions"], "la bande fine aurait dû être isolée"
-    assert all(r["fill"] == "satin_flow" and r["outline"] is False for r in meta["regions"])
-    satin = [z for z in meta["zones"] if z["fill"] == "satin_flow"]
+    assert all(r["fill"] == "satin_relief" and r["outline"] is False for r in meta["regions"])
+    satin = [z for z in meta["zones"] if z["fill"] == "satin_relief"]
     assert satin and all(z["outline"] is False for z in satin)
     # Deux fils : le satin reprend le fil de sa couleur, sans arrêt supplémentaire.
     assert len(meta["threads"]) == 2
@@ -92,6 +109,6 @@ def test_create_page_offers_the_option_unchecked(tmp_path):
     from webapp import create_app
 
     app = create_app({"TESTING": True, "DESIGNS_DIR": str(tmp_path)})
-    html = app.test_client().get("/").get_data(as_text=True)
+    html = app.test_client().get("/numerisation").get_data(as_text=True)
     assert 'id="smart-fill"' in html
     assert 'id="smart-fill" checked' not in html

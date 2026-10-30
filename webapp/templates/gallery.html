@@ -8,6 +8,7 @@
     <p class="muted">{{ designs | length }} motif{{ 's' if designs | length > 1 }}</p>
   </div>
   <div class="head-actions gallery-actions">
+    <a class="btn-ghost" href="{{ url_for('web.create_hand') }}">+ Nouvelle broderie à la main</a>
     <a class="btn-ghost" href="{{ url_for('web.create_cross_stitch') }}">+ Nouveau pixel art en point de croix</a>
     <a class="btn-primary inline" href="{{ url_for('web.create') }}">+ Nouveau motif</a>
   </div>
@@ -34,7 +35,8 @@
       </div>
       <div class="tile-body">
         <strong>{{ d.name }}</strong>
-        {% if d.mode == 'cross_stitch' %}<small>Pixel art · Point de croix</small>{% endif %}
+        {% if d.mode == 'cross_stitch' %}<small>Pixel art · Point de croix</small>
+        {% elif d.mode == 'hand' %}<small>Broderie à la main</small>{% endif %}
         <small>{{ d.created_at | datefr }}</small>
         {% if d.threads %}<div class="mini-swatches">{% for c in d.threads %}<span style="--c: {{ c }}"></span>{% endfor %}</div>{% endif %}
       </div>

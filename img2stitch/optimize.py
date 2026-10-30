@@ -166,7 +166,9 @@ def _copy_pattern(pattern):
     optimized.threadlist = deepcopy(pattern.threadlist)
     optimized.extras = deepcopy(pattern.extras)
     for name, value in pattern.__dict__.items():
-        if name not in {"stitches", "threadlist", "extras", "_previousX", "_previousY"}:
+        # img2stitch_relief : plages d'indices qui ne survivent pas au réordonnancement. Un aperçu
+        # sans dôme reste juste ; un dôme appliqué aux mauvais points ne le serait pas.
+        if name not in {"stitches", "threadlist", "extras", "_previousX", "_previousY", "img2stitch_relief"}:
             setattr(optimized, name, deepcopy(value))
     return optimized
 

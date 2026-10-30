@@ -126,6 +126,7 @@ FILL_TYPES = {
     "cross": "Croisé (quadrillage)",
     "satin": "Satin (zones étroites)",
     "satin_flow": "Satin suivant la forme (lettres, rubans)",
+    "satin_relief": "Satin bombé (lettrage, rubans)",
     "contour": "Contours concentriques",
     "wave": "Ondulé",
     "zigzag": "Zigzag",
@@ -152,6 +153,9 @@ def zone_fill(kind, mask, px_per_mm, s):
         from .flow import satin_flow_runs
         runs, gaps = satin_flow_runs(mask, px_per_mm)
         return [("runs", fill_runs(gaps, px_per_mm, sp, ang, area)), ("runs", runs)]  # complément dessous, satin dessus
+    if kind == "satin_relief":  # colonne satin étagée : guides, sous-couche, satin, bordure
+        from .satin import relief_passes
+        return relief_passes(mask, px_per_mm, s) or zone_fill("satin", mask, px_per_mm, s)
     if kind == "contour":
         return [("loops", contour_loops(mask, px_per_mm, max(0.45, sp * 1.25), s.outline_simplify_mm, area))]
     if kind in ("wave", "zigzag"):

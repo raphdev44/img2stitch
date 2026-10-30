@@ -10,12 +10,13 @@
 </head>
 <body data-page="{% block page %}{% endblock %}">
   <header class="topbar">
-    <a class="brand" href="{{ url_for('web.create') }}">
+    <a class="brand" href="{{ url_for('web.home') }}">
       <img class="brand-logo" src="{{ url_for('static', filename='img/logo.svg', v=1) }}" alt="img2stitch" width="156" height="41">
     </a>
     <nav>
       {% set ep = request.endpoint %}
-      <a href="{{ url_for('web.create') }}" class="{{ 'active' if ep in ('web.create', 'web.create_cross_stitch') }}">Créer</a>
+      <a href="{{ url_for('web.home') }}" class="{{ 'active' if ep == 'web.home' }}">Accueil</a>
+      <a href="{{ url_for('web.create') }}" class="{{ 'active' if ep in ('web.create', 'web.create_cross_stitch', 'web.create_hand') }}">Créer</a>
       <a href="{{ url_for('web.gallery') }}" class="{{ 'active' if ep in ('web.gallery', 'web.design', 'web.edit') }}">Galerie</a>
     </nav>
   </header>

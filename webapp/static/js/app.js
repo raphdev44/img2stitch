@@ -123,14 +123,15 @@
   }
 
   // --- Création ---
-  if (page === "create" || page === "cross-stitch") {
-    const form = $("#create-form") || $("#cross-stitch-form");
+  if (page === "create" || page === "cross-stitch" || page === "hand-embroidery") {
+    const form = $("#create-form") || $("#cross-stitch-form") || $("#hand-form");
     const input = $("#image-input");
     const zone = $("#dropzone");
     const range = $("#colors");
     const out = $("#colors-value");
     const btn = $("#submit-btn");
     const err = $("#form-error");
+    const submitLabel = $(".btn-label", btn).textContent;
     let file = null;
 
     const syncRange = () => {
@@ -211,6 +212,32 @@
     }
     range.addEventListener("input", syncRange);
     syncRange();
+
+    // Jauge de créativité : libellé du cran courant ; elle ne sert à rien si une famille est imposée.
+    const creativity = $("#creativity");
+    const creativityOut = $("#creativity-value");
+    const creativityLabels = creativity ? [...creativity.list.options].map((o) => o.label) : [];
+    const syncCreativity = () => {
+      if (!creativity) return;
+      creativityOut.textContent = creativityLabels[+creativity.value - 1] || "";
+      const p = ((creativity.value - creativity.min) / (creativity.max - creativity.min)) * 100;
+      creativity.style.setProperty("--p", `${p}%`);
+    };
+    const styleSelect = $("#hand-style");
+    const syncFamily = () => {
+      if (!creativity || !styleSelect) return;
+      const auto = styleSelect.value === "auto";
+      creativity.disabled = !auto;
+      $("#creativity-field").classList.toggle("is-muted", !auto);
+    };
+    if (creativity) {
+      creativity.addEventListener("input", syncCreativity);
+      syncCreativity();
+      if (styleSelect) {
+        styleSelect.addEventListener("change", syncFamily);
+        syncFamily();
+      }
+    }
 
     const showError = (msg) => { err.textContent = msg; err.hidden = !msg; };
     const bgValue = () => $("input[name=background]:checked", form).value;
@@ -342,6 +369,8 @@
       data.append("colors", range.value);
       data.append("background", bgValue());
       data.append("exclude", JSON.stringify(excluded));
+      if ($("#hand-style")) data.append("hand_style", $("#hand-style").value);
+      if ($("#creativity") && !$("#creativity").disabled) data.append("creativity", $("#creativity").value);
       if (sizeInputs.length) {
         data.append("width_mm", sizeInputs[0].value);
         data.append("height_mm", sizeInputs[1].value);
@@ -359,7 +388,7 @@
         btn.disabled = false;
         btn.classList.remove("loading");
         $("#create-progress").hidden = true;
-        $(".btn-label", btn).textContent = page === "cross-stitch" ? "Générer le point de croix" : "Générer le motif";
+        $(".btn-label", btn).textContent = submitLabel;
       }
     });
   }
@@ -639,6 +668,7 @@
       contour: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2.5L17 2.5Q21.5 2.5 21.5 7L21.5 17Q21.5 21.5 17 21.5L7 21.5Q2.5 21.5 2.5 17L2.5 7Q2.5 2.5 7 2.5Z M9.6 6.8L14.4 6.8Q17.2 6.8 17.2 9.6L17.2 14.4Q17.2 17.2 14.4 17.2L9.6 17.2Q6.8 17.2 6.8 14.4L6.8 9.6Q6.8 6.8 9.6 6.8Z M10.5 12A1.5 1.5 0 1 0 13.5 12A1.5 1.5 0 1 0 10.5 12Z" stroke-linejoin="round"/></svg>',
       wave: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.2 5.6q2.8 -3.1 5.6 0q2.8 3.1 5.6 0q2.8 -3.1 5.6 0 M2.2 12q2.8 -3.1 5.6 0q2.8 3.1 5.6 0q2.8 -3.1 5.6 0 M2.2 18.4q2.8 -3.1 5.6 0q2.8 3.1 5.6 0q2.8 -3.1 5.6 0" stroke-linejoin="round"/></svg>',
       zigzag: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 6.2l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6 M1 12.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6 M1 19l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6l1.85 -3.6 l1.85 3.6l1.85 3.6 l1.85 -3.6" stroke-linejoin="round"/></svg>',
+      satin_relief: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M-2 23.5C-2 16 7 13 5 0.5 M2.6 23.5C2.6 16 11.6 13 9.6 0.5 M7.2 23.5C7.2 16 16.2 13 14.2 0.5 M11.8 23.5C11.8 16 20.8 13 18.8 0.5 M16.4 23.5C16.4 16 25.4 13 23.4 0.5 M21 23.5C21 16 30 13 28 0.5" stroke-linejoin="round"/><path d="M1.5 23.5C1.5 16 10.5 13 8.5 0.5" stroke-width="2.6" opacity=".45" stroke-linejoin="round"/></svg>',
       none: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2.5L17 2.5Q21.5 2.5 21.5 7L21.5 17Q21.5 21.5 17 21.5L7 21.5Q2.5 21.5 2.5 17L2.5 7Q2.5 2.5 7 2.5Z" stroke-dasharray="3 2.6" stroke-linejoin="round"/></svg>',
       relief_cotes: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.7 1.2 L5.7 22.8 M11.7 1.2 L11.7 22.8 M17.7 1.2 L17.7 22.8" stroke-linejoin="round"/><path d="M2.7 1.2 L2.7 22.8 M8.7 1.2 L8.7 22.8 M14.7 1.2 L14.7 22.8 M20.7 1.2 L20.7 22.8" opacity=".45" stroke-width="2.9" stroke-linejoin="round"/></svg>',
       relief_chevrons: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M0.6 14l2.85 -5 l2.85 5l2.85 5 l2.85 -5l2.85 -5 l2.85 5l2.85 5 l2.85 -5 M0.6 17.9l2.85 -5 l2.85 5l2.85 5 l2.85 -5l2.85 -5 l2.85 5l2.85 5 l2.85 -5 M0.6 4.6l2.85 -5 l2.85 5l2.85 5 l2.85 -5l2.85 -5 l2.85 5l2.85 5 l2.85 -5 M0.6 8.5l2.85 -5 l2.85 5l2.85 5 l2.85 -5l2.85 -5 l2.85 5l2.85 5 l2.85 -5" stroke-linejoin="round"/></svg>',

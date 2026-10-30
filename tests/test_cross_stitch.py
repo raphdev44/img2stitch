@@ -571,7 +571,7 @@ def test_cross_stitch_creation_has_color_options_without_size_controls(tmp_path)
         assert 'name="colors"' in page
         colors_markup = app.jinja_env.get_template("_colors.html").render(min_colors=1, max_colors=12)
         assert colors_markup in page
-        assert colors_markup in client.get("/").get_data(as_text=True)
+        assert colors_markup in client.get("/numerisation").get_data(as_text=True)
         assert 'id="cross-auto-colors"' not in page
         assert 'type="number"' not in page
         assert 'data-analyse="/api/pixel-art/analyse"' in page

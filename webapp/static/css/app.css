@@ -8,6 +8,7 @@
   --accent: #e2725b;
   --accent-2: #c95a44;
   --accent-soft: #fbe9e4;
+  --brand-green: #0e9b85;   /* vert du logo : accent secondaire, jamais dominant */
   --ok: #2f9e6e;
   --err: #d14343;
   --busy: #c48a12;
@@ -105,8 +106,41 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; colo
 /* --- Création --- */
 .hero { text-align: center; max-width: 640px; margin: 0 auto 36px; }
 .hero h1 { font-size: clamp(1.9rem, 4vw, 2.8rem); }
+
+/* Accueil : le titre tient sur une seule ligne tant que l'écran le permet. */
+.hero-home { max-width: 920px; }
+.hero-home h1 { white-space: nowrap; font-size: clamp(1.7rem, 4.3vw, 2.75rem); }
+@media (max-width: 760px) { .hero-home h1 { white-space: normal; } }
 .hero em { font-style: normal; color: var(--accent); }
 .hero p { color: var(--muted); font-size: 1.05rem; margin: 12px 0 0; }
+
+/* --- Accueil : les quatre canaux --- */
+.home-tiles {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 18px; max-width: 980px; margin: 0 auto;
+}
+.home-tile {
+  display: flex; flex-direction: column; gap: 10px; padding: 26px 24px 22px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); transition: transform .15s, border-color .2s, box-shadow .2s;
+}
+.home-tile:hover { transform: translateY(-2px); border-color: var(--accent); }
+.home-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.home-icon {
+  width: 44px; height: 44px; display: grid; place-items: center;
+  border-radius: 12px; background: var(--accent-soft); color: var(--accent);
+}
+.home-icon svg {
+  width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.home-tile strong { font-size: 1.05rem; }
+/* La galerie n'est pas un canal de création : elle porte le vert du logo, les créations le corail. */
+.home-tile.is-link .home-icon,
+.home-tile.is-link .home-go { color: var(--brand-green); }
+.home-tile.is-link .home-icon { background: color-mix(in srgb, var(--brand-green) 12%, transparent); }
+.home-copy { color: var(--muted); font-size: 14px; }
+.home-go { margin-top: auto; padding-top: 12px; font-size: 13px; font-weight: 600; color: var(--accent); }
 
 .create-card { display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; padding: 28px; max-width: 980px; margin: 0 auto; }
 .cross-create { max-width: none; padding: 24px 0; border-top: 1px solid var(--border); }
@@ -149,6 +183,8 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; colo
 .field.is-busy input { opacity: .45; pointer-events: none; transition: opacity .2s; }
 .field.is-busy .unit { background: var(--surface-2); }
 .range-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.field.is-muted { opacity: .55; }
+.field.is-muted input[type=range] { cursor: not-allowed; }
 .palette { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
 .palette button {
   width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: var(--c); cursor: pointer;

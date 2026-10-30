@@ -17,11 +17,11 @@
       </form>
     </div>
     <p class="form-error" id="title-error" role="alert" hidden></p>
-    <p class="muted">{{ d.created_at | datefr }} · {% if d.mode == 'cross_stitch' %}Pixel art · Point de croix{% if d.n_colors %} · {{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }}{% endif %}{% else %}{{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }} demandée{{ 's' if d.n_colors > 1 }}{% endif %} · {{ bg_labels[d.background] }}{% if d.target_mm %} · cadre {{ '%g' % d.target_mm[0] }} × {{ '%g' % d.target_mm[1] }} mm{% endif %}{% if d.engine == 'vector' %} · numérisation par vectorisation{% elif d.engine == 'industrial' %} · numérisation industrielle{% endif %}</p>
+    <p class="muted">{{ d.created_at | datefr }} · {% if d.mode == 'cross_stitch' %}Pixel art · Point de croix{% elif d.mode == 'hand' %}Broderie à la main{% if d.n_colors %} · {{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }}{% endif %}{% if d.hand_creativity %} · créativité {{ d.hand_creativity }} / 5{% endif %}{% else %}{{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }} demandée{{ 's' if d.n_colors > 1 }}{% endif %} · {{ bg_labels[d.background] }}{% if d.target_mm %} · cadre {{ '%g' % d.target_mm[0] }} × {{ '%g' % d.target_mm[1] }} mm{% endif %}{% if d.engine == 'vector' %} · numérisation par vectorisation{% elif d.engine == 'industrial' %} · numérisation industrielle{% endif %}</p>
   </div>
   <div class="head-actions">
     {% if d.status == 'ready' %}
-    {% if d.mode != 'cross_stitch' %}
+    {% if d.mode not in ('cross_stitch', 'hand') %}
     <a class="btn-ghost" href="{{ url_for('web.edit', design_id=d.id) }}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg>Modifier le motif
     </a>
@@ -56,7 +56,7 @@
   <div class="card notice err">
     <strong>Le motif n'a pas pu être généré.</strong>
     <p>{{ d.error }}</p>
-    <a class="btn-primary inline" href="{{ url_for('web.create_cross_stitch' if d.mode == 'cross_stitch' else 'web.create') }}">Essayer une autre image</a>
+    <a class="btn-primary inline" href="{{ url_for('web.create_hand' if d.mode == 'hand' else 'web.create_cross_stitch' if d.mode == 'cross_stitch' else 'web.create') }}">Essayer une autre image</a>
   </div>
 {% else %}
 <div class="design-layout" id="design" data-id="{{ d.id }}" data-status="{{ d.status }}"
@@ -129,8 +129,13 @@
         <div><dt>Points</dt><dd>{{ '{:,}'.format(d.stats.stitches).replace(',', ' ') }}</dd></div>
         <div><dt>Changements de fil</dt><dd>{{ d.stats.color_changes }}</dd></div>
         <div><dt>Coupes</dt><dd>{{ d.stats.trims }}</dd></div>
+        {% if d.mode == 'hand' and d.hand_mix %}
+        {% for key, n in d.hand_mix.stitches.items() %}
+        <div><dt>{{ hand_labels[key] | default(key) }}</dt><dd>{{ n }} forme{{ 's' if n > 1 }}</dd></div>
+        {% endfor %}
+        {% endif %}
       </dl>
-      {% if d.status == 'ready' and d.mode != 'cross_stitch' %}
+      {% if d.status == 'ready' and d.mode not in ('cross_stitch', 'hand') %}
       <div class="optimize-box">
         <div class="optimize-picker" id="optimize-picker">
           <button type="button" class="btn-primary" id="optimize-toggle" aria-haspopup="true"
@@ -176,7 +181,7 @@
       </div>
       {% endif %}
       <h3>Fils</h3>
-      {% set editable = d.status == 'ready' %}
+      {% set editable = d.status == 'ready' and d.mode != 'hand' %}
       <ol class="threads" id="threads" data-recolor="{{ url_for('web.api_recolor', design_id=d.id) }}"
           data-merge="{{ url_for('web.api_merge', design_id=d.id) }}">
         {% for c in d.threads %}<li>
@@ -195,7 +200,7 @@
       <p class="hint">Longueur par fil : points piqués + 30 % (boucles et tension), plus l'amorçage et la coupe.</p>
       {% endif %}
       {% if editable %}<p class="hint">Cliquez sur une pastille pour changer la couleur de ce fil dans toute la broderie.</p>{% endif %}
-      {% if editable and d.mode != 'cross_stitch' and d.threads | length != d.threads | unique | list | length %}
+      {% if editable and d.mode not in ('cross_stitch', 'hand') and d.threads | length != d.threads | unique | list | length %}
       <div class="merge-box">
         {% if d.merge_colors %}
         <p>Les fils de même couleur restants ne peuvent pas être regroupés sans changer la superposition des zones.</p>

@@ -157,7 +157,7 @@ def test_unknown_engine_is_rejected():
 def test_creation_form_offers_all_engines(tmp_path):
     app = create_app({"TESTING": True, "DESIGNS_DIR": str(tmp_path)})
 
-    html = app.test_client().get("/").get_data(as_text=True)
+    html = app.test_client().get("/numerisation").get_data(as_text=True)
 
     assert '<select id="scan-engine" name="engine">' in html
     assert 'value="standard" selected' in html
@@ -173,7 +173,7 @@ def test_geometry_engines_are_disabled_without_shapely(tmp_path, monkeypatch):
     app = create_app({"TESTING": True, "DESIGNS_DIR": str(tmp_path)})
     monkeypatch.setattr(routes, "geometry_available", lambda: False)
 
-    html = app.test_client().get("/").get_data(as_text=True)
+    html = app.test_client().get("/numerisation").get_data(as_text=True)
 
     assert 'value="vector"' in html
     assert "disabled" in html.split('value="vector"')[1].split(">")[0]

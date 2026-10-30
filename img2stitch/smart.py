@@ -10,12 +10,15 @@ import numpy as np
 from .preprocess import _embroidered_pixels, load_and_quantize
 
 MIN_WIDTH_MM = 0.9      # sous ce seuil, le satin n'est qu'un cordon : le contour s'en charge déjà
-MAX_WIDTH_MM = 8.0      # au-delà, les traversées de satin sont trop longues pour rester nettes
-PEAK_FACTOR = 1.6       # un léger renflement reste toléré ; au-delà, ce n'est plus une bande
+# Au-delà, une traversée de satin est trop longue pour rester nette ; et surtout, les éclats de
+# forme qui bordent un dessin (un pan de ciel entre deux branches, un tronc large) font 6 mm et
+# plus : sans ce plafond, le remplissage intelligent les prend pour des traits. Le satin reste
+# applicable à la main au-delà (satin.MAX_WIDTH_MM).
+MAX_WIDTH_MM = 5.0
+PEAK_FACTOR = 2.0       # un réseau a des nœuds plus larges que ses brins : toléré jusque-là
 MIN_LENGTH_MM = 4.0     # une pastille ronde n'est pas une bande
 MIN_ELONGATION = 2.2    # surface / largeur² : écarte les formes trapues
-MAX_AREA_MM2 = 600.0    # une grande surface percée est un fond, pas une bande
-MAX_HOLES = 4           # un réseau de fins lacets (ciel entre des motifs) reste en linéaire
+WIDTH_PERCENTILE = 90   # largeur lue haut sur l'axe médian : un triangle s'élargit, une bande non
 
 
 def _fit_width_mm(path, s, probe_px):
@@ -33,34 +36,27 @@ def _fit_width_mm(path, s, probe_px):
     return min(max_w / fw, max_h / fh)
 
 
-def _holes(pad):
-    """Nombre de trous d'une forme (composantes vides qui ne touchent pas le bord)."""
-    count, labels = cv2.connectedComponents((~pad).astype(np.uint8))
-    border = set(labels[0]) | set(labels[-1]) | set(labels[:, 0]) | set(labels[:, -1])
-    return count - 1 - len(border)
-
-
 def _band(comp, px_per_mm):
     """(forme assez fine, point intérieur) d'une forme connexe, ou (False, None)."""
     # Bord de zéro autour de la forme : sinon, une forme qui remplit sa boîte englobante n'a plus
     # de distance au bord fiable.
     pad = cv2.copyMakeBorder(comp.astype(np.uint8), 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0) > 0
     dist = cv2.distanceTransform(pad.astype(np.uint8), cv2.DIST_L2, 5)
-    peak_mm = 2 * float(dist.max()) / px_per_mm
-    if peak_mm > PEAK_FACTOR * MAX_WIDTH_MM:
-        return False, None  # aplat : inutile d'aller plus loin
-    if comp.sum() / px_per_mm ** 2 > MAX_AREA_MM2 or _holes(pad) > MAX_HOLES:
-        return False, None
     ridge = pad & (dist >= cv2.dilate(dist, np.ones((3, 3), np.uint8)) - 1e-6)
     ridge &= dist > 0.5  # moins d'un dixième de millimètre : bruit de bord
     if ridge.sum() < 2:
         return False, None
-    # Largeur typique lue le long de l'axe médian : un réseau de traits fins (largeur locale
-    # minuscule) n'est pas une bande, même s'il s'étend loin.
-    width_px = 2 * float(np.median(dist[ridge]))
-    width_mm = width_px / px_per_mm
+    # Largeur lue haut sur l'axe médian : une bande garde sa largeur sur toute sa longueur, alors
+    # qu'une forme qui s'élargit (triangle, coin de ciel, aplat en pointe) a une largeur médiane
+    # basse et passerait pour une bande. Le contour noir d'un dessin est un réseau : ses trous et
+    # sa surface ne disent rien de sa finesse, seule la largeur des brins compte.
+    half_mm = dist[ridge] / px_per_mm
+    width_mm = 2 * float(np.percentile(half_mm, WIDTH_PERCENTILE))
     if not MIN_WIDTH_MM <= width_mm <= MAX_WIDTH_MM:
         return False, None
+    if 2 * float(half_mm.max()) > PEAK_FACTOR * width_mm:
+        return False, None  # renflement local : ce n'est pas une bande
+    width_px = width_mm * px_per_mm
     if comp.sum() / max(1.0, width_px ** 2) < MIN_ELONGATION:
         return False, None
     ys, xs = np.nonzero(comp)

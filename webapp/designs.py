@@ -25,6 +25,8 @@ from img2stitch.algorithm_standard import (SIZE_MARGIN_MM, _region_look, _zone_o
                                            pattern_to_image, thread_lengths_mm)
 from img2stitch.cross_stitch import MAX_COLORS as CROSS_STITCH_MAX_COLORS, cross_stitch_palettes, cross_stitch_pattern
 from img2stitch.fill import FILL_TYPES
+from img2stitch.hand import CREATIVITY as HAND_CREATIVITY
+from img2stitch.hand import STYLES as HAND_STYLES, hand_pattern
 from img2stitch.optimize import optimize_pattern
 from img2stitch.radical import optimize_pattern_radical
 from img2stitch.algorithm_vectorize import VectorizerUnavailable
@@ -172,6 +174,8 @@ class DesignStore:
         """Change la couleur d'un fil dans toute la broderie : toutes les zones de ce fil prennent `new`."""
         if new == old:
             return
+        if self.get(design_id).get("mode") == "hand":
+            raise InvalidImage("Une broderie à la main ne se modifie pas : recréez un motif depuis l'image.")
         if self.get(design_id).get("mode") == "cross_stitch":
             self._change_cross_stitch_palette(design_id, recolor=(old, new))
             return
@@ -215,6 +219,8 @@ class DesignStore:
             meta = self._read(d)
             if meta.get("mode") == "cross_stitch":
                 raise InvalidImage("Les fils identiques du point de croix sont déjà regroupés automatiquement.")
+            if meta.get("mode") == "hand":
+                raise InvalidImage("Les fils d'une broderie à la main ne sont pas regroupés.")
             if meta.get("status") != "ready" or meta.get("photo_rendering"):
                 raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
             # "editing" : en cas d'échec le motif reste utilisable, avec ses zones d'avant
@@ -238,7 +244,7 @@ class DesignStore:
             raise InvalidImage("Motif introuvable.")
         with self._modify_lock:
             meta = self._read(source)
-            if meta.get("mode") == "cross_stitch":
+            if meta.get("mode") in ("cross_stitch", "hand"):
                 raise InvalidImage("L'optimisation est réservée aux motifs de broderie classiques.")
             if meta.get("status") != "ready" or meta.get("photo_rendering"):
                 raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
@@ -396,6 +402,8 @@ class DesignStore:
         meta = self.get(design_id)
         if meta.get("mode") == "cross_stitch":
             raise InvalidImage("Un pixel art en point de croix ne peut pas être modifié dans cet éditeur.")
+        if meta.get("mode") == "hand":
+            raise InvalidImage("Une broderie à la main ne se modifie pas : recréez un motif depuis l'image.")
         regions = [dict(r, outline=r.get("outline", True)) for r in meta.get("regions") or []]
         zones = []
         for z, e in zip(current, edits):
@@ -440,7 +448,7 @@ class DesignStore:
 
     # --- Création ---
     def create(self, stream, filename, n_colors, background, target_mm, excluded=(), thicken_lines=False,
-               *, smart_fill=False, mode="classic", engine="standard"):
+               *, smart_fill=False, mode="classic", engine="standard", hand_style="auto", hand_creativity=3):
         if engine not in SCAN_ENGINES:
             raise InvalidImage("Algorithme de numérisation inconnu.")
         img = _load_image(stream)
@@ -462,6 +470,8 @@ class DesignStore:
             "thicken_lines": bool(thicken_lines),
             "smart_fill": bool(smart_fill),
             "engine": engine,
+            "hand_style": hand_style if mode == "hand" else None,
+            "hand_creativity": int(hand_creativity) if mode == "hand" else None,
             "fabric": DEFAULT_FABRIC,
             "status": "processing",
             "step": "Analyse de l'image",
@@ -480,7 +490,8 @@ class DesignStore:
         meta = self._read(d)
         try:
             cross_stitch = meta.get("mode") == "cross_stitch"
-            s = Settings() if cross_stitch else _settings(meta)
+            hand = meta.get("mode") == "hand"
+            s = Settings() if (cross_stitch or hand) else _settings(meta)
             if cross_stitch:
                 try:
                     pattern = cross_stitch_pattern(d / SOURCE, meta["background"],
@@ -491,6 +502,11 @@ class DesignStore:
                                                                     (meta.get("cross_stitch_colors") or {}).items()])
                 except ValueError as exc:
                     raise InvalidImage(str(exc)) from exc
+            elif hand:
+                pattern = hand_pattern(d / SOURCE, meta["background"], n_colors=meta.get("n_colors") or None,
+                                       exclude=_exclude_setting(meta.get("excluded", [])),
+                                       style=meta.get("hand_style") or "auto",
+                                       creativity=meta.get("hand_creativity") or 3)
             else:
                 pattern = image_to_pattern(str(d / SOURCE), s)
             self._update(d, meta, step="Préparation des points", progress=35)
@@ -512,13 +528,21 @@ class DesignStore:
 
             x0, y0, x1, y1 = stitch_bbox_mm(pattern)
             _write_atomic(d / RAW, lambda p: render_raw_preview(pattern, p))
-            zones, regions = _zones_of(pattern, s, meta.get("regions") or [])
-            if cross_stitch:
-                for zone in zones:
-                    zone["fill"] = "cross_stitch"
-                meta.update(n_colors=len(pattern.threadlist), grid=pattern.img2stitch_grid,
-                            cross_stitch_source_palette=[_hex(rgb) for rgb in pattern.img2stitch_source_palette],
-                            cross_stitch_previous=None)
+            if hand:
+                # Une broderie à la main n'a pas de zones : chaque forme a reçu son point à la création.
+                zones = [{"source": _hex(src), "color": _hex(src), "fill": "hand", "outline": False,
+                          "region": None} for src, _ in getattr(pattern, "img2stitch_zones", [])]
+                regions = []
+                meta.update(n_colors=len(pattern.threadlist),
+                            hand_mix=getattr(pattern, "img2stitch_hand", None))
+            else:
+                zones, regions = _zones_of(pattern, s, meta.get("regions") or [])
+                if cross_stitch:
+                    for zone in zones:
+                        zone["fill"] = "cross_stitch"
+                    meta.update(n_colors=len(pattern.threadlist), grid=pattern.img2stitch_grid,
+                                cross_stitch_source_palette=[_hex(rgb) for rgb in pattern.img2stitch_source_palette],
+                                cross_stitch_previous=None)
             frame = {k: float(v) for k, v in pattern.img2stitch_frame.items()}
             self._update(
                 d, meta,
@@ -551,6 +575,7 @@ class DesignStore:
                 photo_error = _write_error(d)
             self._update(d, meta, status="ready", step=None, editing=False, zones_previous=None,
                          regions_previous=None, progress=100, photo_error=photo_error,
+                         error=None,  # une génération qui aboutit efface l'échec précédent
                          photo_version=meta.get("photo_version", 0) + 1)
         except InvalidImage as e:
             self._fail(d, meta, str(e))
@@ -748,7 +773,7 @@ def _settings(meta):
 
 
 def _smart_regions(d, n_colors, background, target_mm, excluded, thicken_lines):
-    """Zones fermées des bandes fines à broder en satin tournant (« Remplissage intelligent »).
+    """Zones fermées des bandes fines à broder en satin bombé (« Remplissage intelligent »).
 
     Détectées une fois, à la création : elles deviennent des zones comme les autres, modifiables
     dans l'éditeur, et survivent aux retouches qui régénèrent le motif.
@@ -765,7 +790,7 @@ def _smart_regions(d, n_colors, background, target_mm, excluded, thicken_lines):
         return []
     log.info("Remplissage intelligent : %d bande(s) fine(s) sur %s", len(shapes), d.name)
     return [{"source": _hex(rgb), "u": round(u, 4), "v": round(v, 4), "color": _hex(rgb),
-             "fill": "satin_flow", "outline": False} for u, v, rgb in shapes]
+             "fill": "satin_relief", "outline": False} for u, v, rgb in shapes]
 
 
 def _zone_setting(zones):
@@ -842,7 +867,8 @@ def _save_pattern(pattern, path):
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"stitches": [[float(x), float(y), int(c)] for x, y, c in pattern.stitches],
                    "threads": [t.color & 0xFFFFFF for t in pattern.threadlist],
-                   "segments": getattr(pattern, "img2stitch_segments", None)}, f)
+                   "segments": getattr(pattern, "img2stitch_segments", None),
+                   "relief": getattr(pattern, "img2stitch_relief", None)}, f)
 
 
 def _load_pattern(d):
@@ -860,6 +886,9 @@ def _load_pattern(d):
         pattern.add_thread({"color": c})
     if data.get("segments"):
         pattern.img2stitch_segments = [tuple(s) for s in data["segments"]]
+    if data.get("relief") and isinstance(data["relief"], dict):
+        pattern.img2stitch_relief = {layer: [tuple(r) for r in ranges]
+                                     for layer, ranges in data["relief"].items()}
     return pattern
 
 

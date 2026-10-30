@@ -16,6 +16,9 @@ FABRICS = {
 }
 _LIGHT = np.array([-0.45, -0.55, 0.70], np.float32)
 _LIGHT /= np.linalg.norm(_LIGHT)
+# Profil d'une traversée de satin bombé : (hauteur au bord, hauteur au centre) en épaisseurs de fil.
+# Le bord s'affaisse, le centre se soulève : c'est la tension de la couche finale, pas un décor.
+RELIEF_DOME = (0.35, 1.00)
 
 
 def stitch_bbox_mm(pattern):
@@ -72,8 +75,12 @@ def _fabric(H, W, ppm, base_rgb, rng):
     return col.astype(np.float32), (h * 0.20 * period + fiber * 0.15 * period).astype(np.float32)
 
 
-def _draw_stitch(Ht, Ct, Tt, cov, a, b, col, r, thick, twist_px, rng):
-    """Dessine un point (capsule) dans les cartes de hauteur / couleur / direction / couverture."""
+def _draw_stitch(Ht, Ct, Tt, cov, a, b, col, r, thick, twist_px, rng, dome=None):
+    """Dessine un point (capsule) dans les cartes de hauteur / couleur / direction / couverture.
+
+    `dome` = (hauteur au bord, hauteur au centre) pour une traversée de colonne satin : le point
+    est alors bombé sur TOUTE sa longueur, et non seulement près de ses extrémités.
+    """
     H, W = Ht.shape
     ax, ay = a
     bx, by = b
@@ -97,11 +104,18 @@ def _draw_stitch(Ht, Ct, Tt, cov, a, b, col, r, thick, twist_px, rng):
     if not alpha.any():
         return
     prof = np.sqrt(np.clip(1 - (dist / r) ** 2, 0, 1))             # section ronde du fil
-    endd = np.minimum(t, L - t)                                       # distance à l'extrémité la plus proche
-    dip = 0.30 + 0.70 * _smooth((endd + 0.5 * r) / (1.5 * r))        # le fil plonge dans le tissu aux extrémités
+    if dome is None:
+        endd = np.minimum(t, L - t)                                   # distance à l'extrémité la plus proche
+        dip = 0.30 + 0.70 * _smooth((endd + 0.5 * r) / (1.5 * r))    # le fil plonge dans le tissu aux extrémités
+    else:
+        u = np.clip(tc / L, 0.0, 1.0)                                 # 0 = bord, 0.5 = axe de la bande
+        dip = dome[0] + dome[1] * np.sin(np.pi * u) ** 0.6
     sl = (slice(y0, y1), slice(x0, x1))
     under = Ht[sl]
-    hnew = np.minimum(thick * prof * dip + 0.5 * under, 1.5 * thick)
+    if dome is None:
+        hnew = np.minimum(thick * prof * dip + 0.5 * under, 1.5 * thick)
+    else:  # le dôme porte tout le volume : la hauteur de la sous-couche ne s'y ajoute pas
+        hnew = thick * prof * dip
     Ht[sl] = under * (1 - alpha) + hnew * alpha
     tw = 1 + 0.07 * np.sin(2 * np.pi * (t / twist_px + 0.4 * s / r))  # torsion du fil
     pix = col[None, None, :] * (tw * (1 + rng.normal(0, 0.03)))[..., None]
@@ -139,14 +153,23 @@ def render_photo_preview(pattern, path, px_per_mm=22, thread_mm=0.42, fabric="cr
                for t in pattern.threadlist] or [_lin(np.array([.8, .1, .1], np.float32))]
     ci, last = 0, None
     pen = np.zeros((H, W), np.float32)  # piqûres de l'aiguille
-    for x, y, cmd in pattern.stitches:
+    # Colonnes en relief : la couche finale porte le dôme, les sous-couches sont recouvertes et
+    # ne doivent donc pas creuser de sillon (sinon le dôme se couvre de points sombres).
+    relief = getattr(pattern, "img2stitch_relief", None) or {}
+    def _marked(layer):
+        mark = np.zeros(len(pattern.stitches), bool)
+        for first, end in relief.get(layer, ()):
+            mark[first:end] = True
+        return mark
+    covered_under, domed = _marked("under"), _marked("top")
+    for si, (x, y, cmd) in enumerate(pattern.stitches):
         c = cmd & pe.COMMAND_MASK
         cur = to_px(x, y)
         if c == pe.STITCH and last is not None:
             _draw_stitch(Ht, Ct, Tt, cov, last, cur, threads[min(ci, len(threads) - 1)], r, thick,
-                         twist_px=0.9 * ppm, rng=rng)
+                         twist_px=0.9 * ppm, rng=rng, dome=RELIEF_DOME if domed[si] else None)
             ix, iy = int(cur[0]), int(cur[1])
-            if 0 <= ix < W and 0 <= iy < H:
+            if 0 <= ix < W and 0 <= iy < H and not covered_under[si]:
                 pen[iy, ix] += 1
         elif c == pe.COLOR_CHANGE:
             ci += 1

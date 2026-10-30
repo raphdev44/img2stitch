@@ -136,3 +136,40 @@ La suppression de l'arrière-plan conserve les mêmes trois modes que la créati
 Les aperçus et les huit formats de téléchargement restent disponibles.
 Limites : 200 cases par côté (400 mm), 40 000 cases, 256 couleurs ; l'absence de grille
 ou de blocs réguliers détectables sur une grande image est signalée comme une erreur.
+
+### Broderie à la main
+Depuis la galerie, « + Nouvelle broderie à la main » ouvre un import dédié qui reprend les
+mêmes contrôles de couleurs et d'arrière-plan que le point de croix. Le moteur, lui, ne
+remplit pas : il **émule des points de main**.
+
+Chaque forme connexe d'une couleur est mesurée (axe médian, largeur au 80e centile,
+longueur, rondeur, présence de trous) puis reçoit le point dont la géométrie raconte cette
+forme :
+
+- trait très fin (moins de 0,7 mm) : point arrière, en une seule ligne continue — jamais
+  de tirets ; trait fin : arrière si la forme enferme une surface (liseré d'un dessin),
+  point de tige sinon (ligne en torsade) ;
+- bande de 2 à 4 mm : point de chaînette si elle est longue, point fendu sinon ;
+- bande de 4 à 7,5 mm : point d'arête pour une feuille allongée, point passé sinon ;
+- bande plus large : point passé jusqu'à 9 mm, puis semis ou reprisage au-delà — le
+  remplissage reste à la marge, comme au fil et à l'aiguille ;
+- petit galet rond : nœud français (moins de 3 mm²) ou roue enroulée ;
+- grande surface ronde : semis de points, jamais un satin en éventail.
+
+La bibliothèque compte vingt-trois points (`img2stitch/handstitch.py`) : point avant,
+point arrière, point de tige, point fendu, chaînette, point posé, point de croix,
+reprisage, point passé (long-and-short), point d'arête, point de filet, chevron,
+fougère, plume, crétois, feston, graine, nœud français, point de poste, marguerite,
+roue enroulée, toile d'araignée et tulipe. Tous sont dessinés par leur géométrie réelle
+(boucles arrondies de la chaînette, bras de la fougère, spirale de la roue), avec un
+léger hasard reproductible sur la longueur, l'angle et la position : c'est ce désordre
+réglé qui distingue le travail main du point machine.
+
+Le formulaire propose aussi de forcer une famille — tige, chaînette, feuilles, fleurs ou
+croix — pour uniformiser les tracés. En automatique, le classificateur décide forme par
+forme.
+
+Une broderie à la main **n'est pas modifiable** : ni éditeur de zones, ni optimisation,
+ni fusion de fils. Les points ont été choisis pour la forme de départ ; il faut recréer
+un motif depuis l'image. Le motif est centré, limité à 110 mm sur son plus grand côté
+(au-delà, les points perdent l'échelle de la main) et exporté dans les huit formats.

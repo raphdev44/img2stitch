@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Nouvelle broderie à la main{% endblock %}
+{% block page %}hand-embroidery{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a href="{{ url_for('web.home') }}" class="back">Retour à l'accueil</a>
+    <h1>Broderie à la main</h1>
+    <p class="muted">Le motif est brodé avec des points de main : point avant, tige, chaînette,
+      arête de poisson, fougère, nœuds… Les surfaces ne sont remplies qu'à la marge, comme au fil et à l'aiguille.</p>
+  </div>
+</div>
+
+<form id="hand-form" class="create-card cross-create" action="{{ url_for('web.api_create_hand') }}" data-analyse="{{ url_for('web.api_analyse') }}" method="post" enctype="multipart/form-data" novalidate>
+  <label class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Importer une image à broder à la main">
+    <input type="file" name="image" id="image-input" accept="image/png,image/jpeg,image/webp,image/avif,.avif" hidden>
+    <div class="dz-empty">
+      <strong>Déposez votre image</strong>
+      <span>ou collez-la avec Ctrl+V, ou cliquez pour parcourir</span>
+      <span>PNG, JPG, WebP ou AVIF · 20 Mo max</span>
+    </div>
+    <div class="dz-preview" hidden>
+      <img id="image-preview" alt="Aperçu de l'image">
+      <span class="dz-name" id="image-name"></span>
+      <button type="button" class="btn-ghost small" id="image-clear">Changer d'image</button>
+    </div>
+  </label>
+
+  <div class="options">
+    {% include "_colors.html" %}
+
+    <label class="select-field">
+      <span>Famille de points</span>
+      <select id="hand-style" name="hand_style">
+        {% for value, label in styles.items() %}
+        <option value="{{ value }}"{% if value == 'auto' %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <small class="hint">En automatique, chaque forme reçoit le point le plus adapté à sa largeur et à sa
+        longueur : trait fin au point avant ou arrière, torsade au point de tige, bande au point d'arête,
+        galet au nœud français ou à la roue enroulée. Une famille impose le même point aux tracés.</small>
+    </label>
+
+    <div class="field" id="creativity-field">
+      <div class="field-head">
+        <label for="creativity">Créativité</label>
+        <output id="creativity-value" class="pill">Équilibré</output>
+      </div>
+      <input type="range" id="creativity" name="creativity" min="1" max="5" value="3" step="1"
+             list="creativity-steps" aria-describedby="creativity-hint">
+      <datalist id="creativity-steps">
+        {% for value, label in creativity.items() %}<option value="{{ value }}" label="{{ label }}"></option>{% endfor %}
+      </datalist>
+      <div class="range-scale"><span>{{ creativity[1] }}</span><span>{{ creativity[5] }}</span></div>
+      <p class="hint" id="creativity-hint">Au premier cran, seuls les points les plus sobres et les plus
+        solides : arrière, tige, fendu, satin, nœud. Plus on pousse, plus le moteur ose le feston sur les
+        bordures, la fougère sur les feuilles, la chaînette et les chevrons sur les rubans, les roues
+        enroulées sur les pastilles. Sans effet quand une famille de points est imposée.</p>
+    </div>
+
+    <fieldset class="field choices">
+      <legend>Arrière-plan</legend>
+      <label class="choice">
+        <input type="radio" name="background" value="outside" checked>
+        <span><strong>Supprimer le fond autour du motif</strong>
+          <small>Les zones de la même couleur à l'intérieur du motif sont conservées et brodées.</small></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="background" value="all">
+        <span><strong>Supprimer le fond et toutes les zones de sa couleur</strong>
+          <small>Les zones intérieures de la couleur du fond restent vides (tissu apparent).</small></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="background" value="keep">
+        <span><strong>Conserver le fond</strong>
+          <small>Toute l'image est brodée, fond compris.</small></span>
+      </label>
+    </fieldset>
+
+    <p class="form-error" id="form-error" role="alert" hidden></p>
+    <button type="submit" class="btn-primary" id="submit-btn" disabled>
+      <span class="btn-label">Générer la broderie main</span>
+      <span class="spinner" aria-hidden="true"></span>
+    </button>
+    <div class="inline-progress" id="create-progress" role="status" aria-live="polite" hidden>
+      <span>Génération de la broderie à la main en cours…</span>
+      <progress class="task-progress" aria-label="Génération de la broderie à la main en cours"></progress>
+    </div>
+  </div>
+</form>
+{% endblock %}
