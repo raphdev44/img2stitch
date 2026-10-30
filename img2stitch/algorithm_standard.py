@@ -77,8 +77,7 @@ def image_to_pattern(path, settings: Settings = None):
     width = min(max_w / fw, max_h / fh)
 
     # Ajustement sur les points réellement piqués (contours, chevauchements, petites zones ignorées...).
-    # Le cadre est calculé avec le moteur standard même en vectorisation : le calibrage est plus
-    # rapide, et les deux moteurs partent de la même largeur (donc de la même palette).
+    # Le cadre est calculé avec le moteur standard pour calibrer rapidement tous les moteurs.
     probe = replace(s, engine="standard")
     for _ in range(4):
         pattern = _build_pattern(path, replace(probe, width_mm=width))
@@ -99,10 +98,13 @@ def image_to_pattern(path, settings: Settings = None):
 
 
 def _build_pattern(path, s: Settings):
-    if getattr(s, "engine", "standard") == "vector":
-        # Import tardif : la vectorisation est optionnelle (dépend de shapely), le moteur standard non.
-        from .vectorize import build_vector_pattern
+    engine = getattr(s, "engine", "standard")
+    if engine == "vector":
+        from .algorithm_vectorize import build_vector_pattern
         return build_vector_pattern(path, s)
+    if engine == "industrial":
+        from .algorithm_industrial import build_industrial_pattern
+        return build_industrial_pattern(path, s)
     px_per_mm = 10  # résolution de travail : 10 px par mm
     palette, masks = load_and_quantize(
         path, round(s.width_mm * px_per_mm), s.n_colors, s.background, s.background_tolerance, s.background_scope,

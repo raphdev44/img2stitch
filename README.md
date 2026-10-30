@@ -3,7 +3,7 @@ Une application pour créer des motifs de broderie machine.
 
 Image (PNG/JPG) -> fichier de broderie machine (.dst, .pes, .jef, .exp, .vp3...)
 
-    pip install -e .
+    pip install -e ".[web]"
     img2stitch logo.png logo.pes --width 80 --colors 4 --preview apercu
 
 `--preview apercu` écrit DEUX images :
@@ -18,7 +18,7 @@ le plus grand possible tout en tenant strictement dans ce rectangle, proportions
 `--background-scope outside` ne retire que le fond relié aux bords de l'image : les zones de la même couleur
 à l'intérieur du motif sont brodées. Par défaut (`all`), toutes les zones de la couleur du fond sont retirées.
 
-## Deux algorithmes de numérisation
+## Algorithmes de numérisation
 `--engine standard` (défaut) découpe l'image en masques de pixels et remplit ces masques rangée par rangée.
 `--engine vector` (option « Par vectorisation (vpype) » du formulaire) passe par une géométrie :
 
@@ -28,11 +28,17 @@ le plus grand possible tout en tenant strictement dans ce rectangle, proportions
 4. remplissage vectoriel : les rangées sont coupées exactement par le bord des formes ;
 5. parcours ordonné au plus proche voisin puis inversé quand c'est plus court — l'équivalent de `linemerge` + `linesort`.
 
-Le résultat est plus régulier sur les formes courbes, au prix d'un peu plus de points. Le moteur standard
-reste le défaut. `pip install -e .[vector]` installe la dépendance (`shapely`).
+`--engine industrial` (option « Industriel » du formulaire) utilise aussi les formes vectorisées, avec un
+parcours optimisé pour la production : regroupement des couleurs, remplissage en serpentin, déplacements
+couverts et réduction des coupes de fil.
+
+Le résultat vectorisé est plus régulier sur les formes courbes, au prix d'un peu plus de points. Le moteur
+standard reste le défaut. `pip install -e ".[vector]"` installe la dépendance (`shapely`) requise par les deux
+moteurs géométriques en mode CLI ; `pip install -e ".[web]"` installe aussi Shapely, Flask et toutes les
+dépendances de base pour l'application web.
 Les étapes utiles du document de spécification (vtracer + vpype) sont reproduites avec OpenCV et Shapely :
 vpype épingle `Shapely==1.8.0` (plus de wheel depuis Python 3.11) et les wheels vtracer pour Python 3.14
-plantent à l'appel — voir la docstring de `img2stitch/vectorize.py`.
+plantent à l'appel — voir la docstring de `img2stitch/algorithm_vectorize.py`.
 
 ## Sauts et coupes de fil
 Le parcours est optimisé pour limiter les sauts : un déplacement est piqué "à couvert" (sous une couleur
@@ -56,7 +62,7 @@ Le motif est centré sur (0,0) (centre du cerceau). Tests : `pip install pytest 
 Exemple complet dans `examples/`.
 
 ## Application web
-    pip install -e .[web]
+    pip install -e ".[web]"
     flask --app webapp run
 
 Puis ouvrir http://127.0.0.1:5000 : création de motifs (image, nombre de couleurs, suppression du fond),

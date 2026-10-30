@@ -3,7 +3,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from img2stitch import Settings
-from img2stitch.convert import _region_look, _split_regions, _zone_override, image_to_pattern, pattern_stats
+from img2stitch.algorithm_standard import _region_look, _split_regions, _zone_override, image_to_pattern, pattern_stats
 from webapp.designs import InvalidImage, _zone_setting, parse_edits
 
 RED = (220, 30, 30)

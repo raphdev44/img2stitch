@@ -1,7 +1,7 @@
 """Longueur de fil estimée par couleur, affichée dans les caractéristiques du motif."""
 import pyembroidery as pe
 
-from img2stitch.convert import THREAD_SETUP_MM, thread_lengths_mm
+from img2stitch.algorithm_standard import THREAD_SETUP_MM, thread_lengths_mm
 
 
 def _pattern(stitches, threads=2):

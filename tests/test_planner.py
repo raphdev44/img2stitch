@@ -5,7 +5,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from img2stitch import Settings
-from img2stitch.convert import image_to_pattern, pattern_stats
+from img2stitch.algorithm_standard import image_to_pattern, pattern_stats
 
 
 def _img(tmp_path, draw):

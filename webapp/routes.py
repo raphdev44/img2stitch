@@ -3,7 +3,7 @@ from datetime import datetime
 from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, send_file, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from img2stitch.vectorize import available as vectorize_available
+from img2stitch.algorithm_vectorize import available as geometry_available
 
 from .designs import (BACKGROUND_MODES, CROSS_STITCH_MAX_COLORS, DEFAULT_SIZE_MM, FABRICS, FILL_TYPES, FORMATS, MAX_COLORS, MAX_SIZE_MM,
                       MIN_COLORS, MIN_SIZE_MM, SCAN_ENGINES, ZONES, InvalidImage, analyse_cross_stitch_image, analyse_image,
@@ -53,7 +53,7 @@ def datefr(value):
 def create():
     return render_template("create.html", min_colors=MIN_COLORS, max_colors=MAX_COLORS,
                            min_size=MIN_SIZE_MM, max_size=MAX_SIZE_MM, default_size=DEFAULT_SIZE_MM,
-                           engines=SCAN_ENGINES, vector_ready=vectorize_available())
+                           engines=SCAN_ENGINES, geometry_ready=geometry_available())
 
 
 @bp.get("/galerie")

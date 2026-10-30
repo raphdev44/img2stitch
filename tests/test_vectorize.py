@@ -8,9 +8,9 @@ import pyembroidery as pe
 import pytest
 from PIL import Image, ImageDraw
 
-import img2stitch.vectorize as vectorize
+import img2stitch.algorithm_vectorize as vectorize
 from img2stitch import Settings
-from img2stitch.convert import image_to_pattern, pattern_stats, pattern_to_image
+from img2stitch.algorithm_standard import image_to_pattern, pattern_stats, pattern_to_image
 from webapp import create_app
 
 PPM = 10
@@ -131,6 +131,16 @@ def test_vector_engine_does_not_stitch_the_hole(tmp_path):
         assert math.hypot(u * width - 80, v * height - 80) > 17   # jamais dans le trou (rayon 20 px)
 
 
+def test_industrial_engine_builds_a_complete_pattern(tmp_path):
+    pattern = image_to_pattern(_disk(tmp_path), Settings(
+        engine="industrial", n_colors=1, background="auto", background_scope="outside", width_mm=40))
+
+    assert pattern_stats(pattern)["stitches"] > 100
+    assert len(pattern.threadlist) == 1
+    assert len(pattern.img2stitch_segments) == len(pattern.img2stitch_zones) == 1
+    assert pattern.img2stitch_engine == "industrial"
+
+
 def test_standard_engine_is_unchanged(tmp_path):
     pattern = image_to_pattern(_disk(tmp_path), Settings(engine="standard", n_colors=1,
                                                          background="auto", width_mm=40))
@@ -144,7 +154,7 @@ def test_unknown_engine_is_rejected():
 
 
 # --- Formulaire et API -------------------------------------------------------------------------
-def test_creation_form_offers_both_engines(tmp_path):
+def test_creation_form_offers_all_engines(tmp_path):
     app = create_app({"TESTING": True, "DESIGNS_DIR": str(tmp_path)})
 
     html = app.test_client().get("/").get_data(as_text=True)
@@ -152,19 +162,23 @@ def test_creation_form_offers_both_engines(tmp_path):
     assert '<select id="scan-engine" name="engine">' in html
     assert 'value="standard" selected' in html
     assert 'value="vector"' in html
+    assert 'value="industrial"' in html
+    assert "Industriel" in html
     assert "Par vectorisation (vpype)" in html
 
 
-def test_vector_option_is_disabled_without_shapely(tmp_path, monkeypatch):
+def test_geometry_engines_are_disabled_without_shapely(tmp_path, monkeypatch):
     from webapp import routes
 
     app = create_app({"TESTING": True, "DESIGNS_DIR": str(tmp_path)})
-    monkeypatch.setattr(routes, "vectorize_available", lambda: False)
+    monkeypatch.setattr(routes, "geometry_available", lambda: False)
 
     html = app.test_client().get("/").get_data(as_text=True)
 
     assert 'value="vector"' in html
     assert "disabled" in html.split('value="vector"')[1].split(">")[0]
+    assert 'value="industrial"' in html
+    assert "disabled" in html.split('value="industrial"')[1].split(">")[0]
     assert "shapely" in html
 
 
@@ -178,7 +192,8 @@ def _wait(store, design_id, timeout=180):
     raise AssertionError("le motif n'a pas fini d'être généré")
 
 
-def test_api_creates_a_vector_design(tmp_path):
+@pytest.mark.parametrize("engine", ["vector", "industrial"])
+def test_api_creates_a_design_with_each_geometry_engine(tmp_path, engine):
     app = create_app({"TESTING": True, "DESIGNS_DIR": str(tmp_path)})
     image = Image.new("RGB", (160, 160), "white")
     ImageDraw.Draw(image).ellipse((20, 20, 140, 140), fill=(220, 30, 30))
@@ -188,14 +203,14 @@ def test_api_creates_a_vector_design(tmp_path):
 
     response = app.test_client().post("/api/motifs", data={
         "image": (stream, "rond.png"), "background": "outside", "colors": "1",
-        "width_mm": "40", "height_mm": "40", "engine": "vector",
+        "width_mm": "40", "height_mm": "40", "engine": engine,
     }, content_type="multipart/form-data")
 
     assert response.status_code == 202, response.get_json()
-    assert response.json["engine"] == "vector"
+    assert response.json["engine"] == engine
     meta = _wait(app.extensions["designs"], response.json["id"])
     assert meta["status"] == "ready", meta.get("error")
-    assert meta["engine"] == "vector"
+    assert meta["engine"] == engine
     assert meta["stats"]["stitches"] > 100
 
 

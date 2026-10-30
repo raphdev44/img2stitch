@@ -1,4 +1,4 @@
-from .convert import convert, image_to_pattern, natural_size_mm
+from .algorithm_standard import convert, image_to_pattern, natural_size_mm
 from .config import Settings
 from .preview import render_previews, render_raw_preview
 from .photo import render_photo_preview

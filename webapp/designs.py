@@ -21,13 +21,13 @@ from werkzeug.utils import secure_filename
 
 from img2stitch import (Settings, color_palettes, estimate_colors, image_to_pattern, natural_size_mm,
                         render_photo_preview, render_raw_preview)
-from img2stitch.convert import (SIZE_MARGIN_MM, _region_look, _zone_override, pattern_stats,
-                                pattern_to_image, thread_lengths_mm)
+from img2stitch.algorithm_standard import (SIZE_MARGIN_MM, _region_look, _zone_override, pattern_stats,
+                                           pattern_to_image, thread_lengths_mm)
 from img2stitch.cross_stitch import MAX_COLORS as CROSS_STITCH_MAX_COLORS, cross_stitch_palettes, cross_stitch_pattern
 from img2stitch.fill import FILL_TYPES
 from img2stitch.optimize import optimize_pattern
 from img2stitch.radical import optimize_pattern_radical
-from img2stitch.vectorize import VectorizerUnavailable
+from img2stitch.algorithm_vectorize import VectorizerUnavailable
 from img2stitch.relief import LEGACY as RELIEF_LEGACY
 from img2stitch.smart import thin_band_regions
 from img2stitch.photo import FABRICS, stitch_bbox_mm
@@ -40,6 +40,7 @@ DEFAULT_FABRIC = "creme"
 SCAN_ENGINES = {
     "standard": "Standard",
     "vector": "Par vectorisation (vpype)",
+    "industrial": "Industriel",
 }
 
 # Optimisations proposées sur un motif prêt : libellé affiché dans l'interface

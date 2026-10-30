@@ -32,6 +32,8 @@ if defined PROXY (
 echo Installation des dependances ...
 ".venv\Scripts\python.exe" -m pip install --upgrade pip || goto :error
 ".venv\Scripts\python.exe" -m pip install -e ".[web]" || goto :error
+echo Verification des dependances (dont Shapely) ...
+".venv\Scripts\python.exe" -c "import cv2, flask, numpy, PIL, pyembroidery, shapely" || goto :error
 
 echo.
 echo Installation terminee. Lancez l'application avec run.bat

@@ -1,6 +1,6 @@
 """Numérisation par vectorisation : l'image devient une géométrie, puis un parcours de broderie.
 
-Le pipeline standard (``img2stitch.convert``) découpe les couleurs en masques de pixels et remplit
+Le pipeline standard (``img2stitch.algorithm_standard``) découpe les couleurs en masques de pixels et remplit
 ces masques rangée par rangée. Ici, on change d'approche : chaque région de couleur est convertie en
 polygones lissés (contours sous-échantillonnés puis simplifiés), ces polygones sont **dilatés** pour
 compenser la tension du fil (*pull compensation*), puis :
@@ -351,7 +351,7 @@ def _groups(polygons, rows):
 def build_vector_pattern(path, settings):
     """Image -> motif, par vectorisation. Même contrat que ``convert._build_pattern``."""
     # Import tardif : convert importe ce module, on évite le cycle à l'import du paquet.
-    from .convert import _center_on_origin, _merge_order, _region_look, _split_regions, _zone_override
+    from .algorithm_standard import _center_on_origin, _merge_order, _region_look, _split_regions, _zone_override
 
     px_per_mm = 10
     palette, masks = load_and_quantize(

@@ -1,6 +1,6 @@
 import argparse
 from .config import Settings
-from .convert import convert, pattern_stats
+from .algorithm_standard import convert, pattern_stats
 from .preview import render_previews
 
 
@@ -13,8 +13,8 @@ def main():
     p.add_argument("--max-width", type=float, help="largeur max du motif brodé en mm (prioritaire sur --width)")
     p.add_argument("--max-height", type=float, help="hauteur max du motif brodé en mm (prioritaire sur --width)")
     p.add_argument("--colors", type=int, default=d.n_colors)
-    p.add_argument("--engine", choices=("standard", "vector"), default=d.engine,
-                   help="numérisation : standard (masques de pixels) ou vector (contours vectorisés + sous-couche)")
+    p.add_argument("--engine", choices=("standard", "vector", "industrial"), default=d.engine,
+                   help="numérisation : standard, vector (contours lissés) ou industrial (parcours de production)")
     p.add_argument("--spacing", type=float, default=d.row_spacing_mm, help="écart des rangées en mm")
     p.add_argument("--angle", type=float, default=d.fill_angle_deg)
     p.add_argument("--background", default=d.background, help="auto | none | #RRGGBB")

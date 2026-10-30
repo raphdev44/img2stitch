@@ -25,13 +25,14 @@ class Settings:
     stagger: bool = True            # décale les points d'une rangée à l'autre (aspect "brique", plus régulier)
 
     # --- Numérisation ---
-    # "standard" : masques de pixels remplis rangée par rangée (moteur historique).
-    # "vector"   : contours vectorisés (Shapely) + sous-couche + remplissage vectoriel.
+    # "standard"  : masques de pixels remplis rangée par rangée (moteur historique).
+    # "vector"    : contours vectorisés (Shapely) + sous-couche + remplissage vectoriel.
+    # "industrial": parcours optimisé pour la production.
     engine: str = "standard"
 
     def __post_init__(self):
-        if self.engine not in ("standard", "vector"):
-            raise ValueError("engine doit être 'standard' ou 'vector'")
+        if self.engine not in ("standard", "vector", "industrial"):
+            raise ValueError("engine doit être 'standard', 'vector' ou 'industrial'")
 
     # --- Chevauchement et contours ---
     overlap_mm: float = 0.4         # une couleur déborde de ce montant SOUS les couleurs posées après elle

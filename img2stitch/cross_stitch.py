@@ -6,7 +6,7 @@ import numpy as np
 import pyembroidery as pe
 from PIL import Image, ImageOps
 
-from .convert import _center_on_origin
+from .algorithm_standard import _center_on_origin
 from .preprocess import _nearest, _reduce_colors, _to_lab
 
 CELL_MM = 2.0

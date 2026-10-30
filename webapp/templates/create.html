@@ -66,14 +66,14 @@
         <select id="scan-engine" name="engine">
           {% for value, label in engines.items() %}
           <option value="{{ value }}"{% if value == 'standard' %} selected{% endif %}
-                  {% if value == 'vector' and not vector_ready %}disabled{% endif %}>{{ label }}</option>
+                  {% if value in ('vector', 'industrial') and not geometry_ready %}disabled{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
         <small class="hint">
           Standard : contours suivis au pixel, remplissage rangée par rangée.
-          Par vectorisation : contours lissés et compensés (tension du fil), sous-couche de stabilisation
-          et remplissage vectoriel — plus régulier sur les formes courbes, un peu plus de points{% if not vector_ready %}
-          (indisponible : paquet « shapely » manquant){% endif %}.
+          Par vectorisation : contours lissés et compensés, sous-couche de stabilisation et remplissage vectoriel.
+          Industriel : parcours optimisé pour la production, avec moins de coupes, déplacements couverts
+          et regroupement des couleurs{% if not geometry_ready %} (indisponible : paquet « shapely » manquant){% endif %}.
         </small>
       </label>
       <label class="choice">
