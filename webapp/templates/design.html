@@ -17,7 +17,7 @@
       </form>
     </div>
     <p class="form-error" id="title-error" role="alert" hidden></p>
-    <p class="muted">{{ d.created_at | datefr }} · {% if d.mode == 'cross_stitch' %}Pixel art · Point de croix{% elif d.mode == 'hand' %}Broderie à la main{% if d.n_colors %} · {{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }}{% endif %}{% if d.hand_creativity %} · créativité {{ d.hand_creativity }} / 5{% endif %}{% else %}{{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }} demandée{{ 's' if d.n_colors > 1 }}{% endif %} · {{ bg_labels[d.background] }}{% if d.target_mm %} · cadre {{ '%g' % d.target_mm[0] }} × {{ '%g' % d.target_mm[1] }} mm{% endif %}{% if d.engine == 'vector' %} · numérisation par vectorisation{% elif d.engine == 'industrial' %} · numérisation industrielle{% endif %}</p>
+    <p class="muted">{{ d.created_at | datefr }} · {% if d.mode == 'cross_stitch' %}Pixel art · Point de croix{% if d.cross_stitch_double %} double{% endif %}{% elif d.mode == 'hand' %}Broderie à la main{% if d.n_colors %} · {{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }}{% endif %}{% if d.hand_creativity %} · créativité {{ d.hand_creativity }} / 5{% endif %}{% else %}{{ d.n_colors }} couleur{{ 's' if d.n_colors > 1 }} demandée{{ 's' if d.n_colors > 1 }}{% endif %} · {{ bg_labels[d.background] }}{% if d.target_mm %} · cadre {{ '%g' % d.target_mm[0] }} × {{ '%g' % d.target_mm[1] }} mm{% endif %}{% if d.engine == 'vector' %} · numérisation par vectorisation{% elif d.engine == 'industrial' %} · numérisation industrielle{% endif %}</p>
   </div>
   <div class="head-actions">
     {% if d.status == 'ready' %}

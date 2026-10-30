@@ -578,5 +578,47 @@ def test_cross_stitch_creation_has_color_options_without_size_controls(tmp_path)
         assert page.count('name="background"') == 3
         for field in ("width_mm", "height_mm", "thicken_lines"):
             assert f'name="{field}"' not in page
+        assert 'name="stitch"' in page
+        assert "Point de croix double" in page
     finally:
         app.extensions["designs"]._pool.shutdown(wait=True)
+
+
+def test_double_cross_adds_the_upright_cross_to_each_stitch():
+    image = Image.new("RGB", (2, 1), "red")
+    simple = cross_stitch_pattern(_source(image), "keep")
+    double = cross_stitch_pattern(_source(image), "keep", double=True)
+    count = lambda pattern: sum(st[2] & pe.COMMAND_MASK == pe.STITCH for st in pattern.stitches)
+    assert count(simple) == 4          # deux segments par case
+    assert count(double) == 8          # quatre segments par case
+    assert double.bounds() == simple.bounds()   # l'étoile reste dans la case
+    assert double.img2stitch_grid["double"] is True
+    assert simple.img2stitch_grid["double"] is False
+    assert double.img2stitch_grid["crosses"] == simple.img2stitch_grid["crosses"] == 2
+
+
+def test_web_double_cross_stitch_option(tmp_path, monkeypatch):
+    app = create_app({"TESTING": True, "DESIGNS_DIR": str(tmp_path)})
+    store = app.extensions["designs"]
+    monkeypatch.setattr(store._pool, "submit", lambda function, *args: function(*args))
+    client = app.test_client()
+    try:
+        response = client.post("/api/pixel-art", data={
+            "image": (_source(Image.new("RGB", (3, 2), "red")), "pixel.png"),
+            "background": "keep", "stitch": "double",
+        })
+        assert response.status_code == 202, response.json
+        design_id = response.json["id"]
+        meta = store.get(design_id)
+        assert meta["status"] == "ready", meta.get("error")
+        assert meta["cross_stitch_double"] is True
+        assert meta["grid"]["double"] is True
+        page = client.get(f"/motifs/{design_id}").get_data(as_text=True)
+        assert "Point de croix double" in page
+        saved = pe.read(str(store.pattern_path(design_id, "pes")))
+        assert len(saved.threadlist) == 1   # les arrêts ajoutés à l'écriture ne changent pas le dessin
+        assert client.post("/api/pixel-art", data={
+            "image": (_source(Image.new("RGB", (2, 1), "red")), "pixel.png"), "stitch": "triple",
+        }).status_code == 400
+    finally:
+        store._pool.shutdown(wait=True)

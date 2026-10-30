@@ -34,7 +34,7 @@ def _public(meta):
                                      "photo_error", "photo_progress", "edit_error", "mode", "grid", "engine",
                                      "cross_stitch_color_limit", "progress", "optimization_report",
                                      "optimization_mode", "optimized_from", "optimized_from_name",
-                                     "hand_style", "hand_creativity", "hand_mix")}
+                                     "hand_style", "hand_creativity", "hand_mix", "cross_stitch_double")}
     out["photo_rendering"] = bool(meta.get("photo_rendering"))
     out["urls"] = {
         "page": url_for("web.design", design_id=meta["id"]),
@@ -77,6 +77,7 @@ def create_cross_stitch():
 @bp.get("/broderie-main")
 def create_hand():
     return render_template("hand_embroidery.html", min_colors=MIN_COLORS, max_colors=MAX_COLORS,
+                           min_size=MIN_SIZE_MM, max_size=MAX_SIZE_MM, default_size=DEFAULT_SIZE_MM,
                            styles=HAND_STYLES, creativity=HAND_CREATIVITY)
 
 
@@ -103,8 +104,19 @@ def api_create_hand():
         creativity = 0
     if creativity not in HAND_CREATIVITY:
         return jsonify(error="Niveau de créativité invalide."), 400
+    raw = [request.form.get(k) for k in ("width_mm", "height_mm")]
+    if any(not v for v in raw):  # ancien client sans champs de taille : on garde la taille par défaut
+        target = (DEFAULT_SIZE_MM, DEFAULT_SIZE_MM)
+    else:
+        try:
+            target = tuple(float(v.replace(",", ".")) for v in raw)
+        except ValueError:
+            return jsonify(error="Dimensions invalides."), 400
+    if not all(MIN_SIZE_MM <= v <= MAX_SIZE_MM for v in target):
+        return jsonify(error=f"La largeur et la hauteur doivent être comprises entre {MIN_SIZE_MM} "
+                             f"et {MAX_SIZE_MM} mm."), 400
     try:
-        design_id = store().create(image.stream, image.filename, n_colors, background, None,
+        design_id = store().create(image.stream, image.filename, n_colors, background, target,
                                    excluded=parse_exclusions(request.form.get("exclude")),
                                    mode="hand", hand_style=style, hand_creativity=creativity)
     except InvalidImage as exc:
@@ -149,11 +161,14 @@ def api_create_cross_stitch():
     background = request.form.get("background", "outside")
     if background not in BACKGROUND_MODES:
         return jsonify(error="Option d'arrière-plan invalide."), 400
+    stitch = request.form.get("stitch", "simple")
+    if stitch not in ("simple", "double"):
+        return jsonify(error="Type de point de croix inconnu."), 400
     try:
         colors = _cross_stitch_colors(request.form.get("colors"))
         excluded = parse_exclusions(request.form.get("exclude"))
         design_id = store().create(image.stream, image.filename, colors or 0, background, None,
-                       excluded=excluded, mode="cross_stitch")
+                       excluded=excluded, mode="cross_stitch", cross_stitch_double=stitch == "double")
     except InvalidImage as exc:
         return jsonify(error=str(exc)), 400
     return jsonify(_public(store().get(design_id))), 202

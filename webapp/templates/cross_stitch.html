@@ -27,6 +27,20 @@
   <div class="options">
     {% include "_colors.html" %}
     <fieldset class="field choices">
+      <legend>Type de point</legend>
+      <label class="choice">
+        <input type="radio" name="stitch" value="simple" checked>
+        <span><strong>Point de croix simple</strong>
+          <small>Deux segments par case : la croix classique, une diagonale dans chaque sens.</small></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="stitch" value="double">
+        <span><strong>Point de croix double</strong>
+          <small>Quatre segments par case : la croix droite s'ajoute à la croix en diagonale, une étoile
+            à huit branches qui couvre mieux la toile et donne un relief plus dense.</small></span>
+      </label>
+    </fieldset>
+    <fieldset class="field choices">
       <legend>Arrière-plan</legend>
       <label class="choice">
         <input type="radio" name="background" value="outside" checked>

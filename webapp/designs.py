@@ -448,7 +448,8 @@ class DesignStore:
 
     # --- Création ---
     def create(self, stream, filename, n_colors, background, target_mm, excluded=(), thicken_lines=False,
-               *, smart_fill=False, mode="classic", engine="standard", hand_style="auto", hand_creativity=3):
+               *, smart_fill=False, mode="classic", engine="standard", hand_style="auto", hand_creativity=3,
+               cross_stitch_double=False):
         if engine not in SCAN_ENGINES:
             raise InvalidImage("Algorithme de numérisation inconnu.")
         img = _load_image(stream)
@@ -481,7 +482,8 @@ class DesignStore:
         if smart_fill and mode == "classic":
             meta["regions"] = _smart_regions(d, n_colors, background, target_mm, excluded, thicken_lines)
         if mode == "cross_stitch":
-            meta.update(cross_stitch_color_limit=n_colors or None, cross_stitch_colors={})
+            meta.update(cross_stitch_color_limit=n_colors or None, cross_stitch_colors={},
+                        cross_stitch_double=bool(cross_stitch_double))
         self._write(d, meta)
         self._pool.submit(self._generate, d)
         return design_id
@@ -498,6 +500,7 @@ class DesignStore:
                                                    source_format=meta.get("source_format"),
                                                    n_colors=meta.get("cross_stitch_color_limit"),
                                                    exclude=_exclude_setting(meta.get("excluded", [])),
+                                                   double=bool(meta.get("cross_stitch_double")),
                                                    color_overrides=[(_rgb(src), _rgb(dst)) for src, dst in
                                                                     (meta.get("cross_stitch_colors") or {}).items()])
                 except ValueError as exc:
@@ -506,7 +509,8 @@ class DesignStore:
                 pattern = hand_pattern(d / SOURCE, meta["background"], n_colors=meta.get("n_colors") or None,
                                        exclude=_exclude_setting(meta.get("excluded", [])),
                                        style=meta.get("hand_style") or "auto",
-                                       creativity=meta.get("hand_creativity") or 3)
+                                       creativity=meta.get("hand_creativity") or 3,
+                                       target_mm=meta.get("target_mm") or None)
             else:
                 pattern = image_to_pattern(str(d / SOURCE), s)
             self._update(d, meta, step="Préparation des points", progress=35)

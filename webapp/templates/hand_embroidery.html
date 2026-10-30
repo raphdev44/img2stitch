@@ -29,6 +29,21 @@
   <div class="options">
     {% include "_colors.html" %}
 
+    <fieldset class="field size" id="size-field">
+      <legend>Taille de la broderie <span class="spinner field-spinner" aria-hidden="true"></span></legend>
+      <div class="size-inputs">
+        <label><span>Largeur</span>
+          <span class="unit"><input type="number" name="width_mm" id="width-mm" min="{{ min_size }}" max="{{ max_size }}" step="0.1" value="{{ default_size }}" required><em>mm</em></span>
+        </label>
+        <span class="times" aria-hidden="true">×</span>
+        <label><span>Hauteur</span>
+          <span class="unit"><input type="number" name="height_mm" id="height-mm" min="{{ min_size }}" max="{{ max_size }}" step="0.1" value="{{ default_size }}" required><em>mm</em></span>
+        </label>
+      </div>
+      <p class="hint">Taille proposée d'après le motif, modifiable. La broderie sera aussi grande que
+        possible dans ce rectangle, en gardant ses proportions — comme pour la numérisation classique.</p>
+    </fieldset>
+
     <label class="select-field">
       <span>Famille de points</span>
       <select id="hand-style" name="hand_style">

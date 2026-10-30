@@ -1,18 +1,20 @@
 :root {
-  --bg: #f7f5f2;
+  --bg: #fbf7f1;
   --surface: #ffffff;
-  --surface-2: #f1eee9;
-  --text: #1d1b19;
+  --surface-2: #f3efe8;
+  --text: #16202b;
   --muted: #77716a;
-  --border: #e7e2db;
-  --accent: #e2725b;
-  --accent-2: #c95a44;
-  --accent-soft: #fbe9e4;
+  --border: #ece4d9;
+  --accent: #ef5f3c;
+  --accent-2: #d94d2c;
+  --accent-soft: #fdeae3;
   --brand-green: #0e9b85;   /* vert du logo : accent secondaire, jamais dominant */
+  --violet: #6f5bff;        /* pastille du canal numérisation */
+  --amber: #e0a020;         /* pastille du canal broderie main */
   --ok: #2f9e6e;
   --err: #d14343;
   --busy: #c48a12;
-  --radius: 18px;
+  --radius: 20px;
   --shadow: 0 1px 2px rgba(30, 20, 10, .04), 0 8px 30px rgba(30, 20, 10, .06);
   color-scheme: light dark;
 }
@@ -109,7 +111,7 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; colo
 
 /* Accueil : le titre tient sur une seule ligne tant que l'écran le permet. */
 .hero-home { max-width: 920px; }
-.hero-home h1 { white-space: nowrap; font-size: clamp(1.7rem, 4.3vw, 2.75rem); }
+.hero-home h1 { position: relative; display: inline-block; white-space: nowrap; font-size: clamp(1.7rem, 4.3vw, 2.75rem); }
 @media (max-width: 760px) { .hero-home h1 { white-space: normal; } }
 .hero em { font-style: normal; color: var(--accent); }
 .hero p { color: var(--muted); font-size: 1.05rem; margin: 12px 0 0; }
@@ -141,6 +143,21 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; colo
 .home-tile.is-link .home-icon { background: color-mix(in srgb, var(--brand-green) 12%, transparent); }
 .home-copy { color: var(--muted); font-size: 14px; }
 .home-go { margin-top: auto; padding-top: 12px; font-size: 13px; font-weight: 600; color: var(--accent); }
+
+/* --- Charte : une couleur par canal, étincelles du titre --- */
+.hero-home em { color: var(--brand-green); }
+.hero-home .spark { position: absolute; top: 50%; width: 26px; height: 26px; margin-top: -13px; color: var(--accent); }
+.hero-home .spark svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
+.hero-home .spark-l { left: -42px; }
+.hero-home .spark-r { right: -42px; transform: scaleX(-1); }
+@media (max-width: 980px) { .hero-home .spark { display: none; } }
+.home-tile { --tone: var(--accent); --tone-soft: var(--accent-soft); }
+.home-tile.tone-green { --tone: var(--brand-green); --tone-soft: #e4f5f0; }
+.home-tile.tone-violet { --tone: var(--violet); --tone-soft: #ece8ff; }
+.home-tile.tone-coral { --tone: var(--accent); --tone-soft: var(--accent-soft); }
+.home-tile.tone-amber { --tone: var(--amber); --tone-soft: #fbeed2; }
+.home-tile .home-icon { background: var(--tone-soft); color: var(--tone); }
+.home-tile .home-go { color: var(--tone); }
 
 .create-card { display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; padding: 28px; max-width: 980px; margin: 0 auto; }
 .cross-create { max-width: none; padding: 24px 0; border-top: 1px solid var(--border); }

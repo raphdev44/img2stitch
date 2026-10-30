@@ -105,6 +105,26 @@ def test_creativity_gauge_only_moves_how_daring_the_stitches_are():
     assert choose_stitch(2.4, 14, style="feuilles", creativity=1) == "stem"
 
 
+def test_similar_strokes_share_one_stitch_and_roles_stay_distinct():
+    from img2stitch.hand import _assign_families
+
+    def brush(width=1.5, length=12, taper=0.7, straight=0.9, outline=True, encloses=True):
+        return {"width": width, "length": length, "taper": taper, "straight": straight,
+                "encloses": encloses, "big_ring": False, "outline": outline}
+
+    contour = [brush(length=6), brush(length=25), brush(length=4)]   # le même contour, trois arcs
+    stem = [brush(outline=False, encloses=False, straight=0.2, length=30)]
+    leaves = [brush(width=2.5, taper=0.85, outline=False, length=7),
+              brush(width=2.55, taper=0.8, outline=False, length=18)]
+    units = contour + stem + leaves
+    _assign_families(units, "auto", 5)
+    assert len({u["kind"] for u in contour}) == 1     # une feuille, un seul point
+    assert contour[0]["kind"] == "back"
+    assert stem[0]["kind"] == "stem"                  # une tige n'est pas un contour
+    assert len({u["kind"] for u in leaves}) == 1      # deux feuilles jumelles, le même point
+    assert leaves[0]["kind"] in {"fern", "fishbone", "satin"}
+
+
 def test_creativity_stays_inside_the_five_notches():
     for level in (-3, 0, 1, 3, 5, 9, None):
         kind = choose_stitch(3.0, 40, straight=0.99, creativity=level)

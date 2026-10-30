@@ -374,10 +374,11 @@
       if (sizeInputs.length) {
         data.append("width_mm", sizeInputs[0].value);
         data.append("height_mm", sizeInputs[1].value);
-        data.append("thicken_lines", $("#thicken-lines").checked ? "true" : "false");
-        data.append("smart_fill", $("#smart-fill").checked ? "true" : "false");
-        data.append("engine", $("#scan-engine").value);
       }
+      // Options propres à la numérisation classique : absentes des formulaires pixel art et main.
+      if ($("#thicken-lines")) data.append("thicken_lines", $("#thicken-lines").checked ? "true" : "false");
+      if ($("#smart-fill")) data.append("smart_fill", $("#smart-fill").checked ? "true" : "false");
+      if ($("#scan-engine")) data.append("engine", $("#scan-engine").value);
       try {
         const res = await fetch(form.action, { method: "POST", body: data });
         const json = await res.json().catch(() => ({}));

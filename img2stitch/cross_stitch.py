@@ -224,7 +224,7 @@ def cross_stitch_palettes(source, background="outside", *, source_format=None, m
 
 
 def cross_stitch_pattern(source, background="outside", *, source_format=None, n_colors=None, color_overrides=(),
-                         exclude=()):
+                         exclude=(), double=False):
     if n_colors is not None and (isinstance(n_colors, bool) or not isinstance(n_colors, int)
                                  or not 1 <= n_colors <= MAX_COLORS):
         raise ValueError("Le nombre de couleurs doit être compris entre 1 et 256.")
@@ -267,6 +267,14 @@ def cross_stitch_pattern(source, background="outside", *, source_format=None, n_
                 pattern.stitch_abs(left + unit, top + unit)
                 pattern.move_abs(left + unit, top)
                 pattern.stitch_abs(left, top + unit)
+                if double:
+                    # Point de croix double : la croix droite s'ajoute à la croix en diagonale,
+                    # soit une étoile à huit branches sur quatre segments.
+                    half = unit / 2
+                    pattern.move_abs(left, top + half)
+                    pattern.stitch_abs(left + unit, top + half)
+                    pattern.move_abs(left + half, top)
+                    pattern.stitch_abs(left + half, top + unit)
                 previous = left, top + unit
     pattern.end()
     cx, cy = _center_on_origin(pattern)
@@ -276,5 +284,5 @@ def cross_stitch_pattern(source, background="outside", *, source_format=None, n_
     pattern.img2stitch_segments = segments
     pattern.img2stitch_source_palette = source_palette
     pattern.img2stitch_grid = {"columns": cells.shape[1], "rows": cells.shape[0], "cell_mm": CELL_MM,
-                             "crosses": int(np.count_nonzero(labels >= 0))}
+                             "crosses": int(np.count_nonzero(labels >= 0)), "double": bool(double)}
     return pattern

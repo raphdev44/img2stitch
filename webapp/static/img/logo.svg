@@ -2,7 +2,7 @@
   <style>
     .ink { fill: #14243f; }
     .two { fill: #0e9b85; }
-    .thread { fill: none; stroke: #0e9b85; stroke-width: 62; stroke-linecap: round; stroke-linejoin: round; }
+    .thread { fill: none; stroke: #ef5f3c; stroke-width: 62; stroke-linecap: round; stroke-linejoin: round; }
     @media (prefers-color-scheme: dark) { .ink { fill: #f2efea; } }
   </style>
   <g transform="translate(-46.0 0)">

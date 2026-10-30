@@ -93,7 +93,7 @@ def _temper(kind, level):
 
 
 def _classify(width_mm, length_mm, *, roundness=0.0, encloses=False, area_mm2=0.0, style="auto",
-              taper=0.0, straight=0.0, big_ring=False):
+              taper=0.0, straight=0.0, big_ring=False, filled=None):
     """Point de main le plus adapté à une forme mesurée.
 
     La largeur ne suffit pas : `taper` (effilement aux deux bouts) distingue une feuille
@@ -124,9 +124,9 @@ def _classify(width_mm, length_mm, *, roundness=0.0, encloses=False, area_mm2=0.
     if roundness >= 0.72 and ratio < 2.0 and area_mm2 > WOVEN_MAX_AREA:
         return "seed"      # grande surface ronde et courte : un semis, pas un satin en éventail
     # --- la forme avant la largeur : feuille, bordure, bande ---
-    if taper >= 0.35 and 1.4 <= width <= 7.5 and ratio >= 2.0 and length_mm >= 5.0:
+    if filled is not False and taper >= 0.35 and 1.4 <= width <= 7.5 and ratio >= 2.0 and length_mm >= 5.0:
         return "fern" if width <= 3.2 else "fishbone"   # feuille : nervure et bras, ou arête
-    if big_ring and encloses and 1.2 <= width <= 3.4:
+    if big_ring and encloses and 1.2 <= width <= 3.4 and length_mm >= 8.0:
         return "blanket"      # on longe le bord d'une grande forme : point de feston
     if width <= 0.7:      # trait très fin : une ligne continue, jamais des tirets
         return "back"
@@ -147,7 +147,7 @@ def _classify(width_mm, length_mm, *, roundness=0.0, encloses=False, area_mm2=0.
 
 
 def choose_stitch(width_mm, length_mm, *, roundness=0.0, encloses=False, area_mm2=0.0, style="auto",
-                  taper=0.0, straight=0.0, big_ring=False, creativity=3):
+                  taper=0.0, straight=0.0, big_ring=False, creativity=3, filled=None):
     """Point de main le plus adapté à une forme, à un cran de créativité donné.
 
     `creativity` (1 à 5) ne change jamais la géométrie : il fixe seulement jusqu'où le moteur a le
@@ -156,7 +156,7 @@ def choose_stitch(width_mm, length_mm, *, roundness=0.0, encloses=False, area_mm
     jamais tempérée, puisque l'utilisateur l'a demandée.
     """
     kind = _classify(width_mm, length_mm, roundness=roundness, encloses=encloses, area_mm2=area_mm2,
-                     style=style, taper=taper, straight=straight, big_ring=big_ring)
+                     style=style, taper=taper, straight=straight, big_ring=big_ring, filled=filled)
     return kind if style != "auto" else _temper(kind, creativity)
 
 
@@ -213,11 +213,15 @@ def _shape(comp, ppm):
     holes = (~sub).astype(np.uint8)
     count, labels = cv2.connectedComponents(holes, connectivity=4)
     border = set(np.unique(np.concatenate((labels[0], labels[-1], labels[:, 0], labels[:, -1]))).tolist())
-    encloses = any(i not in border and int((labels == i).sum()) >= 4 for i in range(1, count))
+    inner = [i for i in range(1, count) if i not in border and int((labels == i).sum()) >= 4]
+    encloses = bool(inner)
+    # Distance aux vides intérieurs : un contour de feuille les longe, une tige traverse le fond.
+    hole_dist = (cv2.distanceTransform(np.isin(labels, inner).astype(np.uint8), cv2.DIST_L2, 5)
+                 if encloses else None)
     outlines = [(contour.reshape(-1, 2).astype(float) + np.array([x0, y0])) / ppm for contour in contours]
-    return {"paths": paths, "outlines": outlines, "half": half, "dist": dist, "origin": (x0, y0), "area": area,
-            "roundness": roundness, "length": length, "encloses": encloses,
-            "center": ((x0 + x1) / 2 / ppm, (y0 + y1) / 2 / ppm)}
+    return {"paths": paths, "outlines": outlines, "half": half, "dist": dist, "hole_dist": hole_dist,
+            "origin": (x0, y0), "area": area, "roundness": roundness, "length": length,
+            "encloses": encloses, "center": ((x0 + x1) / 2 / ppm, (y0 + y1) / 2 / ppm)}
 
 
 def _order(strokes):
@@ -332,6 +336,28 @@ def _draw_short_stroke(pen, comp, ppm):
     pen.put([mean + axis * float(along.min()), mean + axis * float(along.max())])
 
 
+def _runs_along_hole(info, path, ppm):
+    """La branche longe-t-elle un vide intérieur (contour de feuille, de pétale) ?
+
+    C'est le meilleur indice de rôle : un contour borde l'intérieur vide de la forme, une tige
+    traverse le fond. Deux traits de même largeur n'ont donc pas le même point selon qu'ils cernent
+    une forme ou courent en ligne ouverte.
+    """
+    dist = info.get("hole_dist")
+    if dist is None or len(path) < 2:
+        return False
+    step = max(1, len(path) // 40)
+    height, width = dist.shape
+    tolerance = max(2.0, 1.1 * 2 * info["half"] * ppm)
+    hits = 0
+    for x, y in path[::step]:
+        ix = int(np.clip(round(x) - info["origin"][0], 0, width - 1))
+        iy = int(np.clip(round(y) - info["origin"][1], 0, height - 1))
+        if dist[iy, ix] <= tolerance:
+            hits += 1
+    return hits * 2 >= len(path[::step])
+
+
 def _branch_measures(info, path, ppm):
     """Longueur et demi-largeur d'une branche, mesurées le long de son axe."""
     pts = path.astype(float) / ppm
@@ -346,16 +372,97 @@ def _branch_measures(info, path, ppm):
     peak = max(samples) or 1e-6
     chord = float(np.hypot(*(pts[-1] - pts[0]))) if len(pts) > 1 else 0.0
     shape = {"taper": min(samples[0], samples[-1]) / peak,
-             "straight": chord / arc if arc > 1e-6 else 0.0}
+             "straight": chord / arc if arc > 1e-6 else 0.0,
+             "outline": _runs_along_hole(info, path, ppm)}
     return arc, half, half_fn, shape
 
 
-def _component_strokes(comp, ppm, style, seed, creativity=3):
-    """Traits et point retenu pour une forme connexe.
+def _alike(a, b):
+    """Deux traits se ressemblent-ils assez pour recevoir le même point ?
 
-    La largeur se mesure **branche par branche** : sur un dessin au trait, toutes les lignes
-    forment une seule forme de plusieurs millimètres de large, et une mesure globale ferait
-    broder un remplissage à la place du tracé.
+    Largeur en rapport (pas en millimètres : 1,5 et 2 mm sont le même trait d'un dessin à l'autre),
+    puis effilement, rectitude et rapport longueur / largeur. Les drapeaux de forme (contour d'une
+    grande forme, bordure) doivent être identiques : un feston ne se compare pas à un trait libre.
+    """
+    if a["encloses"] != b["encloses"] or a["big_ring"] != b["big_ring"]:
+        return False
+    if a.get("filled") != b.get("filled") or a.get("outline") != b.get("outline"):
+        return False
+    if abs(math.log(max(a["width"], 0.2) / max(b["width"], 0.2))) > 0.35:
+        return False
+    if abs(a["taper"] - b["taper"]) > 0.25 or abs(a["straight"] - b["straight"]) > 0.22:
+        return False
+    # La longueur ne sépare pas les familles : une feuille courte et une feuille longue du même
+    # dessin sont le même motif, et doivent recevoir le même point.
+    return True
+
+
+def _assign_families(units, style, creativity):
+    """Un point par famille de traits semblables, pas un point par trait.
+
+    Trois niveaux de cohérence, dans cet ordre :
+    1. le **poids du trait** du dessin (20e centile des largeurs) sépare un tracé au stylo d'une
+       forme réellement plus grasse. Une branche mesure 1,0 à 1,6 mm selon sa longueur : sans ce
+       poids, la même tige changeait de point d'un segment à l'autre ;
+    2. tous les traits fins du motif reçoivent **le même** point de ligne (arrière si le dessin
+       cerne des formes, tige s'il court en lignes ouvertes) : c'est ce qui rend une tige continue
+       et des contours de feuilles homogènes ;
+    3. les formes plus grasses sont regroupées par mesures voisines et partagent la moyenne du
+       groupe (une feuille courte et une feuille longue, le même point).
+    """
+    if not units:
+        return
+    if style != "auto":
+        for unit in units:
+            unit["kind"] = choose_stitch(unit["width"], unit["length"], roundness=0.0,
+                                         encloses=unit["encloses"], area_mm2=0.0, style=style,
+                                         taper=unit["taper"], straight=unit["straight"],
+                                         big_ring=unit["big_ring"], creativity=creativity)
+        return
+    weight = float(np.percentile([unit["width"] for unit in units], 20))
+    for unit in units:
+        unit["filled"] = unit["width"] >= 1.45 * weight and unit["taper"] >= 0.45
+    for unit in units:
+        if unit["width"] >= 1.45 * weight:
+            continue
+        # Un trait de même largeur ne raconte pas la même chose s'il cerne une forme (arrière,
+        # ligne nette) ou s'il court en ligne ouverte (tige, torsade).
+        unit["kind"] = _temper("back" if unit.get("outline") else "stem", creativity)
+    groups = []
+    for unit in units:
+        if unit["width"] < 1.45 * weight:
+            continue
+        for group in groups:
+            if _alike(group["mean"], unit):
+                count = group["count"] = group["count"] + 1
+                for key in ("width", "length", "taper", "straight"):
+                    group["mean"][key] += (unit[key] - group["mean"][key]) / count
+                group["members"].append(unit)
+                break
+        else:
+            groups.append({"count": 1, "members": [unit],
+                           "mean": {key: unit[key] for key in ("width", "length", "taper", "straight",
+                                                               "encloses", "big_ring", "filled", "outline")}})
+    for group in groups:
+        mean = group["mean"]
+        # area_mm2=0 : une branche est un trait, jamais un point. Avec une surface estimée,
+        # un petit trait de 2 mm passait sous le seuil du nœud et devenait une pastille.
+        kind = choose_stitch(mean["width"], mean["length"], roundness=0.0,
+                             encloses=mean["encloses"], area_mm2=0.0, style="auto",
+                             taper=mean["taper"], straight=mean["straight"],
+                             big_ring=mean["big_ring"], filled=mean["filled"], creativity=creativity)
+        for unit in group["members"]:
+            unit["kind"] = kind
+
+
+def _component_units(comp, ppm, style, seed, creativity=3):
+    """Mesure une forme connexe sans décider seul du point de ses traits.
+
+    Renvoie `(units, strokes, kind)` : les traits sont rendus sans point, pour une décision à
+    l'échelle de tout le motif ; les pastilles, semis et reprises sont dessinés tout de suite, car
+    leur point ne se compare à rien. La largeur se mesure **branche par branche** : sur un dessin
+    au trait, toutes les lignes forment une seule forme de plusieurs millimètres de large, et une
+    mesure globale ferait broder un remplissage à la place du tracé.
     """
     info = _shape(comp, ppm)
     pen = hs.Pen(seed=seed)
@@ -365,24 +472,20 @@ def _component_strokes(comp, ppm, style, seed, creativity=3):
     if (info["roundness"] >= 0.72 and info["length"] <= 4.0 and info["area"] <= 9.0
             and not info["encloses"]):
         hs.french_knot(pen, info["center"], max(0.6, min(1.5, info["length"] / 2)))
-        return pen.strokes, "french_knot"
+        return [], pen.strokes, "french_knot"
     if info["paths"]:
-        kinds = []
+        units = []
         for path in info["paths"]:
             arc, half, half_fn, shape = _branch_measures(info, path, ppm)
             if arc < 0.8:
                 continue
-            width = 2 * half if half > 0.05 else 0.6
-            # area_mm2=0 : une branche est un trait, jamais un point. Avec une surface estimée,
-            # un petit trait de 2 mm passait sous le seuil du nœud et devenait une pastille.
-            kind = choose_stitch(width, arc, roundness=0.0, encloses=info["encloses"],
-                                 area_mm2=0.0, style=style, taper=shape["taper"],
-                                 straight=shape["straight"], big_ring=info["area"] >= 40,
-                                 creativity=creativity)
-            _draw_path(pen, path.astype(float) / ppm, half_fn, half, kind)
-            kinds.append(kind)
-        if kinds:
-            return pen.strokes, Counter(kinds).most_common(1)[0][0]
+            units.append({"mode": "stroke", "path": path, "half": half, "half_fn": half_fn,
+                          "length": arc, "width": 2 * half if half > 0.05 else 0.6,
+                          "taper": shape["taper"], "straight": shape["straight"],
+                          "outline": shape["outline"],
+                          "encloses": info["encloses"], "big_ring": info["area"] >= 40})
+        if units:
+            return units, [], None
     width = 2 * info["half"] if info["half"] > 0.05 else info["length"]
     kind = choose_stitch(width, info["length"], roundness=info["roundness"], encloses=info["encloses"],
                          area_mm2=info["area"], style=style, creativity=creativity)
@@ -397,12 +500,24 @@ def _component_strokes(comp, ppm, style, seed, creativity=3):
             kind = "french_knot"
     else:
         _draw(pen, info, ppm, kind)
-    return pen.strokes, kind
+    return [], pen.strokes, kind
+
+
+def _draw_units(pen, units, ppm):
+    """Dessine les traits d'une forme avec les familles décidées à l'échelle du motif."""
+    for unit in units:
+        _draw_path(pen, unit["path"].astype(float) / ppm, unit["half_fn"], unit["half"], unit["kind"])
+    return Counter(unit["kind"] for unit in units).most_common(1)[0][0]
 
 
 def hand_pattern(source, background="outside", *, n_colors=None, exclude=(), style="auto", seed=0,
-                 creativity=3):
-    """Image -> motif « broderie à la main » (EmbPattern pyembroidery)."""
+                 creativity=3, target_mm=None):
+    """Image -> motif « broderie à la main » (EmbPattern pyembroidery).
+
+    `target_mm` est le rectangle (largeur, hauteur) que la broderie ne doit pas dépasser : le motif
+    est mis à l'échelle pour y tenir au plus juste, en gardant ses proportions. Sans lui, le motif
+    garde sa taille naturelle, seulement ramenée sous MAX_END_MM.
+    """
     bg, scope = BACKGROUND_MODES.get(background, BACKGROUND_MODES["outside"])
     width_px = int(WORK_PX_PER_MM * TARGET_MM)
     # thicken_lines : sans lui, le filtre médian du prétraitement efface les traits de 1 à 3 px
@@ -422,20 +537,38 @@ def hand_pattern(source, background="outside", *, n_colors=None, exclude=(), sty
 
     # Les grandes surfaces d'abord, les détails ensuite : c'est l'ordre du travail à la main.
     order = sorted(range(len(masks)), key=lambda i: -int(masks[i].sum()))
-    zones, segments, tally, shapes = [], [], {}, 0
-    first = True
+    measured, pending, shapes = [], [], 0
     for color_index in order:
         rgb, mask = palette[color_index], masks[color_index]
-        strokes, chosen = [], []
         count, labels, stats, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), connectivity=8)
+        entries = []
         for index in range(1, count):
             if stats[index, cv2.CC_STAT_AREA] / WORK_PX_PER_MM ** 2 < MIN_AREA_MM2:
                 continue
-            made, kind = _component_strokes(labels == index, WORK_PX_PER_MM, style,
-                                            seed=seed + 7919 * (index + 1), creativity=creativity)
-            strokes.extend(made)
-            chosen.append(kind)
+            component_seed = seed + 7919 * (index + 1)
+            units, ready, kind = _component_units(labels == index, WORK_PX_PER_MM, style,
+                                                  component_seed, creativity=creativity)
+            entries.append({"units": units, "strokes": ready, "kind": kind, "seed": component_seed})
+            pending.extend(units)
             shapes += 1
+        measured.append((rgb, entries))
+
+    # Une seule décision par famille de formes semblables, toutes couleurs confondues : c'est ce
+    # qui rend une tige continue et des feuilles répétées cohérentes.
+    _assign_families(pending, style, creativity)
+
+    zones, segments, tally = [], [], {}
+    first = True
+    for rgb, entries in measured:
+        strokes, chosen = [], []
+        for entry in entries:
+            if entry["units"]:
+                pen = hs.Pen(seed=entry["seed"])
+                chosen.append(_draw_units(pen, entry["units"], WORK_PX_PER_MM))
+                strokes.extend(pen.strokes)
+            else:
+                chosen.append(entry["kind"])
+                strokes.extend(entry["strokes"])
         if not strokes:
             continue
         for kind in chosen:
@@ -459,21 +592,31 @@ def hand_pattern(source, background="outside", *, n_colors=None, exclude=(), sty
                 pattern.add_stitch_absolute(pe.STITCH, x * 10, y * 10)
             cur = stroke[-1]
 
-    # Cadrage : au-delà de 11 cm, les points perdent l'échelle de la main.
+    # Cadrage : le motif est mis à l'échelle pour tenir dans la taille demandée ; sans taille, on ne
+    # réduit qu'au-delà de 11 cm, où les points perdraient l'échelle de la main. Le repère (ppm) suit
+    # l'échelle, sinon l'aperçu ne superposerait plus les points et l'image source.
     xs = [s[0] for s in pattern.stitches]
     ys = [s[1] for s in pattern.stitches]
+    ppm = float(WORK_PX_PER_MM)
     if xs:
-        longest = max(max(xs) - min(xs), max(ys) - min(ys)) / 10
-        if longest > MAX_END_MM:
-            factor = MAX_END_MM / longest
+        width_mm = (max(xs) - min(xs)) / 10
+        height_mm = (max(ys) - min(ys)) / 10
+        if target_mm:
+            target_w, target_h = (max(1.0, float(v)) for v in target_mm)
+            factor = min(target_w / max(width_mm, 1e-6), target_h / max(height_mm, 1e-6))
+        else:
+            longest = max(width_mm, height_mm)
+            factor = MAX_END_MM / longest if longest > MAX_END_MM else 1.0
+        if abs(factor - 1.0) > 1e-6:
             for stitch in pattern.stitches:
                 stitch[0] *= factor
                 stitch[1] *= factor
+            ppm /= factor
     pattern.end()
     cx, cy = _center_on_origin(pattern)
     pattern.img2stitch_zones = zones
     pattern.img2stitch_segments = segments
     pattern.img2stitch_hand = {"stitches": tally, "shapes": shapes}
-    pattern.img2stitch_frame = {"w": width_px, "h": height, "ppm": float(WORK_PX_PER_MM),
+    pattern.img2stitch_frame = {"w": width_px, "h": height, "ppm": ppm,
                                 "cx": cx, "cy": cy, "scale": 1.0}
     return pattern
