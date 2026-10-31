@@ -124,6 +124,8 @@ def streamline_pattern(path, *, n_colors, background="auto", background_toleranc
         total_lines += len(mm)
         rgb = tuple(int(max(0, min(255, c))) for c in color)
         pattern.add_thread({"color": (rgb[0] << 16) | (rgb[1] << 8) | rgb[2]})
+        if zones:   # add_thread ne pique rien : sans ce changement, tout sortirait d'un seul fil
+            pattern.add_command(pe.COLOR_CHANGE)
         zones.append((rgb, None))
         segments.append((len(pattern.stitches), len(zones) - 1))
         previous = _emit(pattern, mm, previous)

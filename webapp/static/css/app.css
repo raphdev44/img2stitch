@@ -725,3 +725,13 @@ a.btn-ghost { display: inline-flex; align-items: center; }
 }
 .zm-fill span { flex: 1; }
 .zm-fill em { font-style: normal; font-size: 11px; color: var(--muted); }
+
+/* Scan type badges on gallery tiles */
+.scan-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 650; text-transform: uppercase; }
+.scan-badge.pixel { color: var(--text); background: color-mix(in srgb, #ff6b6b 12%, transparent); }
+.scan-badge.hand { color: var(--text); background: color-mix(in srgb, #f5a623 12%, transparent); }
+.scan-badge.streamline { color: var(--text); background: color-mix(in srgb, #63b3ed 12%, transparent); }
+.scan-badge.classic { color: var(--text); background: color-mix(in srgb, #a78bfa 12%, transparent); }
+
+.streamline-icon { position: absolute; top: 8px; right: 8px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-2); border: 2px solid var(--accent); cursor: default; }
+.streamline-icon::after { content: ""; position: absolute; top: 50%; left: 50%; width: 12px; height: 12px; margin-top: -6px; margin-left: -6px; background: url('/static/img/icone_streamline.png') no-repeat center / contain; }

@@ -23,21 +23,29 @@
 {% else %}
 <div class="gallery">
   {% for d in designs %}
-  {% if d.has_thumb %}{% set img = 'thumb.jpg' %}
+  {% if d.mode == 'streamline' %}{% set img = 'preview_photo.png' %}
+  {% elif d.has_thumb %}{% set img = 'thumb.jpg' %}
   {% elif d.has_photo %}{% set img = 'preview_photo.png' %}
   {% elif d.has_raw %}{% set img = 'preview_raw.png' %}
   {% else %}{% set img = 'source.png' %}{% endif %}
   <div class="tile-card">
-    <a class="tile" href="{{ url_for('web.design', design_id=d.id) }}">
-      <div class="tile-img {{ 'pending' if img == 'source.png' or img == 'preview_raw.png' }}">
+    <a class="tile" href="{{ url_for('web.design', design_id=d.id) }}>
+      <div class="tile-img {{ 'pending' if img == 'source.png' or img == 'preview_raw.png' }}" style="position: relative;">
         <img loading="lazy" src="{{ url_for('web.design_file', design_id=d.id, name=img, v=d.photo_version) }}" alt="{{ d.name }}">
         {% if d.status == 'processing' %}<span class="badge busy">En cours</span>
         {% elif d.status == 'error' %}<span class="badge err">Erreur</span>{% endif %}
+        {% if d.mode == 'streamline' %}
+        <span class="scan-badge streamline" title="Streamlines / bleu">Streamlines</span>
+        <span class="streamline-icon" title="Numérisation streamline"></span>
+        {% elif d.mode == 'cross_stitch' %}
+        <span class="scan-badge pixel" title="Pixel / saumon">Pixel art · Point de croix</span>
+        {% elif d.mode == 'hand' %}
+        <span class="scan-badge hand" title="Main / jaune">Broderie à la main</span>
+        {% elif d.mode == 'classic' %}
+        <span class="scan-badge classic" title="Classique / violet">Classique</span>{% endif %}
       </div>
       <div class="tile-body">
         <strong>{{ d.name }}</strong>
-        {% if d.mode == 'cross_stitch' %}<small>Pixel art · Point de croix</small>
-        {% elif d.mode == 'hand' %}<small>Broderie à la main</small>{% endif %}
         <small>{{ d.created_at | datefr }}</small>
         {% if d.threads %}<div class="mini-swatches">{% for c in d.threads %}<span style="--c: {{ c }}"></span>{% endfor %}</div>{% endif %}
       </div>

@@ -39,7 +39,8 @@ def _public(meta):
                                      "photo_error", "photo_progress", "edit_error", "mode", "grid", "engine",
                                      "cross_stitch_color_limit", "progress", "optimization_report",
                                      "optimization_mode", "optimized_from", "optimized_from_name",
-                                     "hand_style", "hand_creativity", "hand_mix", "cross_stitch_double")}
+                                     "hand_style", "hand_creativity", "hand_mix", "cross_stitch_double",
+                                     "streamline", "streamline_info")}
     out["photo_rendering"] = bool(meta.get("photo_rendering"))
     out["urls"] = {
         "page": url_for("web.design", design_id=meta["id"]),
@@ -84,6 +85,12 @@ def create_hand():
     return render_template("hand_embroidery.html", min_colors=MIN_COLORS, max_colors=MAX_COLORS,
                            min_size=MIN_SIZE_MM, max_size=MAX_SIZE_MM, default_size=DEFAULT_SIZE_MM,
                            styles=HAND_STYLES, creativity=HAND_CREATIVITY, stitch_types=STITCH_TYPES)
+
+
+@bp.get("/streamlines")
+def create_streamline():
+    return render_template("streamline.html", min_colors=MIN_COLORS, max_colors=MAX_COLORS,
+                           min_size=MIN_SIZE_MM, max_size=MAX_SIZE_MM, default_size=DEFAULT_SIZE_MM)
 
 
 @bp.get("/api/broderie-main/exemples/<stitch>.png")
@@ -136,6 +143,52 @@ def api_create_hand():
         design_id = store().create(image.stream, image.filename, n_colors, background, target,
                                    excluded=parse_exclusions(request.form.get("exclude")),
                                    mode="hand", hand_style=style, hand_creativity=creativity)
+    except InvalidImage as exc:
+        return jsonify(error=str(exc)), 400
+    return jsonify(_public(store().get(design_id))), 202
+
+
+@bp.post("/api/streamlines")
+def api_create_streamline():
+    image = request.files.get("image")
+    if image is None or not image.filename:
+        return jsonify(error="Aucune image envoyée."), 400
+    background = request.form.get("background", "outside")
+    if background not in BACKGROUND_MODES:
+        return jsonify(error="Option d'arrière-plan invalide."), 400
+    try:
+        n_colors = int(request.form.get("colors", ""))
+    except ValueError:
+        return jsonify(error="Nombre de couleurs invalide."), 400
+    if not MIN_COLORS <= n_colors <= MAX_COLORS:
+        return jsonify(error=f"Le nombre de couleurs doit être compris entre {MIN_COLORS} et {MAX_COLORS}."), 400
+    raw = [request.form.get(k) for k in ("width_mm", "height_mm")]
+    if any(not v for v in raw):  # champs absents : la taille du dépôt (99 mm) s'applique
+        target = None
+    else:
+        try:
+            target = tuple(float(v.replace(",", ".")) for v in raw)
+        except ValueError:
+            return jsonify(error="Dimensions invalides."), 400
+        if not all(MIN_SIZE_MM <= v <= MAX_SIZE_MM for v in target):
+            return jsonify(error=f"La largeur et la hauteur doivent être comprises entre {MIN_SIZE_MM} "
+                                 f"et {MAX_SIZE_MM} mm."), 400
+    try:
+        line_width = float(request.form.get("line_width_mm", "0.4").replace(",", "."))
+        relax = int(request.form.get("relax_iterations", "14"))
+    except ValueError:
+        return jsonify(error="Réglages streamlines invalides."), 400
+    if not 0.15 <= line_width <= 2.0:
+        return jsonify(error="La largeur du fil doit être comprise entre 0,15 et 2 mm."), 400
+    if not 4 <= relax <= 40:
+        return jsonify(error="Le lissage doit être compris entre 4 et 40 passes."), 400
+    try:
+        design_id = store().create(image.stream, image.filename, n_colors, background, target,
+                                   excluded=parse_exclusions(request.form.get("exclude")),
+                                   mode="streamline",
+                                   streamline_options={"line_width_mm": line_width,
+                                                       "background_fill": request.form.get("background_fill") == "true",
+                                                       "relax_iterations": relax})
     except InvalidImage as exc:
         return jsonify(error=str(exc)), 400
     return jsonify(_public(store().get(design_id))), 202
@@ -245,7 +298,7 @@ def design(design_id):
 @bp.get("/motifs/<design_id>/edition")
 def edit(design_id):
     meta = store().get(design_id) or abort(404)
-    if meta["status"] != "ready" or meta.get("mode") in ("cross_stitch", "hand"):
+    if meta["status"] != "ready" or meta.get("mode") in ("cross_stitch", "hand", "streamline"):
         return redirect(url_for("web.design", design_id=design_id))
     return render_template("edit.html", d=meta, zones=store().zones(design_id), fills=FILL_TYPES)
 

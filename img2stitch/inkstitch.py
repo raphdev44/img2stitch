@@ -114,11 +114,12 @@ def _interpolate_linear_rings(ring1, ring2, max_stitch_length, start=None):
 
 def _make_spiral(rings, stitch_length, starting_point):
     """Spirale simple : on enchaîne les anneaux deux à deux, de l'extérieur vers le centre."""
-    path, part = [], None
+    path, part, start = [], None, starting_point
     for ring1, ring2 in zip(rings[:-1], rings[1:]):
-        part = _interpolate_linear_rings(ring1, ring2, stitch_length, starting_point)
+        part = _interpolate_linear_rings(ring1, ring2, stitch_length, start)
         if len(part) >= 2:
             path.extend(part[:-1])
+            start = part[-1]   # l'anneau suivant se raccorde là où le fil s'est arrêté
     if part is not None and len(part):
         path.append(part[-1])
     return np.array(path, dtype=float) if path else np.empty((0, 2))
@@ -165,6 +166,87 @@ def _offset_rings(mask, px_per_mm, s):
     return rings
 
 
+def _level_rings(level, px_per_mm, s):
+    """Courbes de niveau : bords extérieurs ET bords de trous, tous orientés pareil.
+
+    Une forme percée a deux frontières. N'en garder qu'une laissait toute la couronne
+    intérieure vide (56 % de couverture sur un anneau) : les deux sont donc des anneaux à part
+    entière, et la spirale de chacun avance vers le milieu de la matière jusqu'à rejoindre
+    l'autre — c'est exactement ce que fait l'offset de polygones d'Ink/Stitch.
+    """
+    found, _ = cv2.findContours(level.astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+    eps = max(0.5, s.outline_simplify_mm * px_per_mm)
+    rings = []
+    for c in found:
+        if cv2.contourArea(c) / px_per_mm ** 2 < s.min_area_mm2 or len(c) < 4:
+            continue
+        c = cv2.approxPolyDP(c, eps, True).reshape(-1, 2)
+        if len(c) < 3:
+            continue
+        pts = np.asarray([((x + 0.5) / px_per_mm, (y + 0.5) / px_per_mm) for x, y in c], float)
+        rings.append(_orient(_closed(pts)))
+    return rings
+
+
+def _poly_distance(a, b):
+    """Distance minimale entre deux polylignes (points sous-échantillonnés)."""
+    pa = np.asarray(a, float)[::max(1, len(a) // 120)]
+    pb = np.asarray(b, float)[::max(1, len(b) // 120)]
+    d = np.hypot(pa[:, None, 0] - pb[None, :, 0], pa[:, None, 1] - pb[None, :, 1])
+    return float(d.min())
+
+
+def _ring_chains(mask, px_per_mm, s):
+    """Anneaux du bord vers le centre, groupés en chaînes : une chaîne par lobe de la forme.
+
+    Les anneaux sont les isocontours de la transformée de distance. Contrairement à une érosion
+    répétée, ils épousent AUSSI le bord d'un trou et ne s'arrêtent pas quand la forme s'amincit :
+    une forme percée est remplie des deux côtés, jusqu'à ce que les deux fronts se rejoignent.
+
+    Chaque anneau rejoint la chaîne dont le dernier anneau est le plus proche ; quand un lobe se
+    scinde en deux, la chaîne se duplique : chaque morceau reçoit sa propre spirale au lieu d'être
+    abandonné, et la bande entre le dernier anneau du parent et le premier de l'enfant est
+    interpolée comme les autres.
+    """
+    distance = cv2.distanceTransform(mask.astype(np.uint8), cv2.DIST_L2, 5) / px_per_mm
+    spacing = max(0.2, s.row_spacing_mm)
+    top = float(distance.max())
+    if top <= 0:
+        return []
+    limit = 1.6 * spacing
+
+    chains, open_chains = [], []      # open_chains : [(index de chaîne, dernier anneau)]
+    level = spacing / 2.0
+    while level <= top + spacing / 2.0:
+        region = (distance >= level).astype(np.uint8)
+        rings = _level_rings(region, px_per_mm, s)
+        if not rings:
+            break
+        targets = {}
+        for ring in rings:
+            best = None
+            for index, previous in open_chains:
+                found = _poly_distance(ring, previous)
+                if best is None or found < best[0]:
+                    best = (found, index)
+            if best is None or best[0] > limit:
+                chains.append([ring])
+                targets.setdefault(len(chains) - 1, []).append((0.0, ring))
+            else:
+                targets.setdefault(best[1], []).append((best[0], ring))
+        following = []
+        for index, candidates in targets.items():
+            candidates.sort(key=lambda c: c[0])
+            chains[index].append(candidates[0][1])        # le plus proche continue la chaîne
+            following.append((index, candidates[0][1]))
+            for _, extra in candidates[1:]:               # les autres bifurquent
+                chains.append(list(chains[index][:-1]) + [extra])
+                following.append((len(chains) - 1, extra))
+        open_chains = following
+        level += spacing
+    return chains
+
+
 def _circle(cx, cy, radius, stitch_length):
     """Anneau circulaire, assez fin pour que l'interpolation reste fidèle à l'arrondi."""
     n = max(24, int(2.0 * math.pi * radius / max(0.35, stitch_length * 0.35)))
@@ -174,13 +256,17 @@ def _circle(cx, cy, radius, stitch_length):
 
 # --- les trois remplissages -------------------------------------------------------------------
 def _contour_runs(mask, px_per_mm, s):
-    """Remplissage en contour : une seule spirale, du bord vers le centre."""
-    rings = _offset_rings(mask, px_per_mm, s)
-    if not rings:
-        return []
+    """Remplissage en contour : une spirale par lobe, du bord vers le centre."""
     stitch = max(0.6, min(s.max_stitch_mm, 2.0))
-    path = _make_spiral(rings, stitch, rings[0][0])
-    return _to_runs(_clip(path, mask, px_per_mm, MIN_SEGMENT_MM), s)
+    runs = []
+    for index, chain in enumerate(_ring_chains(mask, px_per_mm, s)):
+        if not chain:
+            continue
+        path = (_make_spiral(chain, stitch, chain[0][0]) if len(chain) > 1 else chain[0])
+        # `comp` distinct : le planificateur entre dans chaque lobe par son bord au lieu de
+        # relier deux lobes éloignés par un déplacement piqué au travers du tissu.
+        runs += _to_runs(_clip(path, mask, px_per_mm, MIN_SEGMENT_MM), s, comp=100 + index)
+    return runs
 
 
 def _circular_runs(mask, px_per_mm, s):
@@ -247,7 +333,7 @@ def _cross_runs(mask, px_per_mm, s):
     return runs
 
 
-def _to_runs(paths, s):
+def _to_runs(paths, s, comp=0):
     """Polylignes -> rangées du planificateur (p0, p1, pts), rééchantillonnées au pas des points.
 
     Une spirale est une courbe : le pas suit la convention des autres passages courbes du projet
@@ -260,7 +346,7 @@ def _to_runs(paths, s):
         pts = _resample(np.asarray(path, dtype=float), step)
         if len(pts) < 2:
             continue
-        runs.append({"p0": tuple(pts[0]), "p1": tuple(pts[-1]), "comp": 0, "row": n,
+        runs.append({"p0": tuple(pts[0]), "p1": tuple(pts[-1]), "comp": comp, "row": n,
                      "pts": [tuple(p) for p in pts[1:]]})
     return runs
 

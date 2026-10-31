@@ -123,8 +123,8 @@
   }
 
   // --- Création ---
-  if (page === "create" || page === "cross-stitch" || page === "hand-embroidery") {
-    const form = $("#create-form") || $("#cross-stitch-form") || $("#hand-form");
+  if (page === "create" || page === "cross-stitch" || page === "hand-embroidery" || page === "streamline") {
+    const form = $("#create-form") || $("#cross-stitch-form") || $("#hand-form") || $("#streamline-form");
     const input = $("#image-input");
     const zone = $("#dropzone");
     const range = $("#colors");
@@ -397,6 +397,10 @@
       if ($("#thicken-lines")) data.append("thicken_lines", $("#thicken-lines").checked ? "true" : "false");
       if ($("#smart-fill")) data.append("smart_fill", $("#smart-fill").checked ? "true" : "false");
       if ($("#scan-engine")) data.append("engine", $("#scan-engine").value);
+      // Réglages propres aux streamlines : absents des autres formulaires.
+      if ($("#line-width")) data.append("line_width_mm", $("#line-width").value);
+      if ($("#relax-iterations")) data.append("relax_iterations", $("#relax-iterations").value);
+      if ($("#background-fill")) data.append("background_fill", $("#background-fill").checked ? "true" : "false");
       try {
         const res = await fetch(form.action, { method: "POST", body: data });
         const json = await res.json().catch(() => ({}));

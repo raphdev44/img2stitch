@@ -32,6 +32,7 @@ from img2stitch.radical import optimize_pattern_radical
 from img2stitch.algorithm_vectorize import VectorizerUnavailable
 from img2stitch.relief import LEGACY as RELIEF_LEGACY
 from img2stitch.smart import thin_band_regions
+from img2stitch.streamline import streamline_pattern
 from img2stitch.photo import FABRICS, stitch_bbox_mm
 
 log = logging.getLogger(__name__)
@@ -44,6 +45,9 @@ SCAN_ENGINES = {
     "vector": "Par vectorisation (vpype)",
     "industrial": "Industriel",
 }
+
+# Modes de création : le canal choisi à la création fixe le moteur et l'interface.
+MODES = ("classic", "cross_stitch", "hand", "streamline")
 
 # Optimisations proposées sur un motif prêt : libellé affiché dans l'interface
 OPTIMIZATIONS = {
@@ -174,7 +178,7 @@ class DesignStore:
         """Change la couleur d'un fil dans toute la broderie : toutes les zones de ce fil prennent `new`."""
         if new == old:
             return
-        if self.get(design_id).get("mode") == "hand":
+        if self.get(design_id).get("mode") in ("hand", "streamline"):
             raise InvalidImage("Une broderie à la main ne se modifie pas : recréez un motif depuis l'image.")
         if self.get(design_id).get("mode") == "cross_stitch":
             self._change_cross_stitch_palette(design_id, recolor=(old, new))
@@ -219,8 +223,8 @@ class DesignStore:
             meta = self._read(d)
             if meta.get("mode") == "cross_stitch":
                 raise InvalidImage("Les fils identiques du point de croix sont déjà regroupés automatiquement.")
-            if meta.get("mode") == "hand":
-                raise InvalidImage("Les fils d'une broderie à la main ne sont pas regroupés.")
+            if meta.get("mode") in ("hand", "streamline"):
+                raise InvalidImage("Les fils de ce motif ne sont pas regroupés.")
             if meta.get("status") != "ready" or meta.get("photo_rendering"):
                 raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
             # "editing" : en cas d'échec le motif reste utilisable, avec ses zones d'avant
@@ -244,7 +248,7 @@ class DesignStore:
             raise InvalidImage("Motif introuvable.")
         with self._modify_lock:
             meta = self._read(source)
-            if meta.get("mode") in ("cross_stitch", "hand"):
+            if meta.get("mode") in ("cross_stitch", "hand", "streamline"):
                 raise InvalidImage("L'optimisation est réservée aux motifs de broderie classiques.")
             if meta.get("status") != "ready" or meta.get("photo_rendering"):
                 raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
@@ -402,8 +406,8 @@ class DesignStore:
         meta = self.get(design_id)
         if meta.get("mode") == "cross_stitch":
             raise InvalidImage("Un pixel art en point de croix ne peut pas être modifié dans cet éditeur.")
-        if meta.get("mode") == "hand":
-            raise InvalidImage("Une broderie à la main ne se modifie pas : recréez un motif depuis l'image.")
+        if meta.get("mode") in ("hand", "streamline"):
+            raise InvalidImage("Ce motif se recrée depuis sa photo : il n'a pas de zones à modifier.")
         regions = [dict(r, outline=r.get("outline", True)) for r in meta.get("regions") or []]
         zones = []
         for z, e in zip(current, edits):
@@ -449,7 +453,9 @@ class DesignStore:
     # --- Création ---
     def create(self, stream, filename, n_colors, background, target_mm, excluded=(), thicken_lines=False,
                *, smart_fill=False, mode="classic", engine="standard", hand_style="auto", hand_creativity=3,
-               cross_stitch_double=False):
+               cross_stitch_double=False, streamline_options=None):
+        if mode not in MODES:
+            raise InvalidImage("Mode de création inconnu.")
         if engine not in SCAN_ENGINES:
             raise InvalidImage("Algorithme de numérisation inconnu.")
         img = _load_image(stream)
@@ -481,6 +487,8 @@ class DesignStore:
         }
         if smart_fill and mode == "classic":
             meta["regions"] = _smart_regions(d, n_colors, background, target_mm, excluded, thicken_lines)
+        if mode == "streamline":
+            meta["streamline"] = _streamline_meta(streamline_options)
         if mode == "cross_stitch":
             meta.update(cross_stitch_color_limit=n_colors or None, cross_stitch_colors={},
                         cross_stitch_double=bool(cross_stitch_double))
@@ -492,8 +500,9 @@ class DesignStore:
         meta = self._read(d)
         try:
             cross_stitch = meta.get("mode") == "cross_stitch"
+            streamline = meta.get("mode") == "streamline"
             hand = meta.get("mode") == "hand"
-            s = Settings() if (cross_stitch or hand) else _settings(meta)
+            s = Settings() if (cross_stitch or hand or streamline) else _settings(meta)
             if cross_stitch:
                 try:
                     pattern = cross_stitch_pattern(d / SOURCE, meta["background"],
@@ -512,7 +521,8 @@ class DesignStore:
                                        creativity=meta.get("hand_creativity") or 3,
                                        target_mm=meta.get("target_mm") or None)
             else:
-                pattern = image_to_pattern(str(d / SOURCE), s)
+                pattern = _streamline_pattern(d, meta) if streamline else image_to_pattern(
+                    str(d / SOURCE), s)
             self._update(d, meta, step="Préparation des points", progress=35)
             stats = pattern_stats(pattern)
             if stats["stitches"] == 0:
@@ -532,7 +542,15 @@ class DesignStore:
 
             x0, y0, x1, y1 = stitch_bbox_mm(pattern)
             _write_atomic(d / RAW, lambda p: render_raw_preview(pattern, p))
-            if hand:
+            if streamline:
+                # Une région brodée = un bloc de fil (passage fond puis passage motif).
+                zones = [{"source": _hex(src), "color": _hex(src), "fill": "streamline",
+                          "outline": False, "region": None}
+                         for src, _ in getattr(pattern, "img2stitch_zones", [])]
+                regions = []
+                meta.update(n_colors=len(pattern.threadlist),
+                            streamline_info=getattr(pattern, "img2stitch_streamline", None))
+            elif hand:
                 # Une broderie à la main n'a pas de zones : chaque forme a reçu son point à la création.
                 zones = [{"source": _hex(src), "color": _hex(src), "fill": "hand", "outline": False,
                           "region": None} for src, _ in getattr(pattern, "img2stitch_zones", [])]
@@ -774,6 +792,31 @@ def _settings(meta):
                                             None if r["color"].lower() == r["source"].lower() else _rgb(r["color"]),
                                             r["fill"], r.get("outline", True)) for r in meta.get("regions") or []),
                     merge_same_colors=bool(meta.get("merge_colors")))
+
+
+def _streamline_meta(options):
+    """Réglages streamlines mémorisés à la création (valeurs du dépôt par défaut)."""
+    o = options or {}
+    return {"line_width_mm": round(min(2.0, max(0.15, float(o.get("line_width_mm", 0.4)))), 2),
+            "background_fill": bool(o.get("background_fill", True)),
+            "relax_iterations": int(min(40, max(4, int(o.get("relax_iterations", 14)))))}
+
+
+def _streamline_pattern(d, meta):
+    """Photo -> motif par lignes de courant (`img2stitch.streamline`)."""
+    bg, scope = BACKGROUND_MODES[meta["background"]]
+    o = meta.get("streamline") or {}
+    try:
+        return streamline_pattern(
+            str(d / SOURCE), n_colors=int(meta.get("n_colors") or 4),
+            background=bg, background_scope=scope,
+            exclude=_exclude_setting(meta.get("excluded", [])),
+            target_mm=tuple(meta["target_mm"]) if meta.get("target_mm") else None,
+            line_width_mm=o.get("line_width_mm", 0.4),
+            background_fill=o.get("background_fill", True),
+            relax_iterations=o.get("relax_iterations", 14))
+    except ValueError as exc:
+        raise InvalidImage(str(exc)) from exc
 
 
 def _smart_regions(d, n_colors, background, target_mm, excluded, thicken_lines):

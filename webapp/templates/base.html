@@ -16,7 +16,7 @@
     <nav>
       {% set ep = request.endpoint %}
       <a href="{{ url_for('web.home') }}" class="{{ 'active' if ep == 'web.home' }}">Accueil</a>
-      <a href="{{ url_for('web.create') }}" class="{{ 'active' if ep in ('web.create', 'web.create_cross_stitch', 'web.create_hand') }}">Créer</a>
+      <a href="{{ url_for('web.create') }}" class="{{ 'active' if ep in ('web.create', 'web.create_cross_stitch', 'web.create_hand', 'web.create_streamline') }}">Créer</a>
       <a href="{{ url_for('web.gallery') }}" class="{{ 'active' if ep in ('web.gallery', 'web.design', 'web.edit') }}">Galerie</a>
     </nav>
   </header>

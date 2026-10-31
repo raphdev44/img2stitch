@@ -10,9 +10,9 @@ def test_home_offers_the_four_channels(tmp_path):
     client = _app(tmp_path).test_client()
     html = client.get("/").get_data(as_text=True)
     for label in ("Galerie de motifs", "Numérisation classique",
-                  "Pixel art en point de croix", "Broderie à la main"):
+                  "Pixel art en point de croix", "Broderie à la main", "Streamlines"):
         assert label in html
-    for url in ("/galerie", "/numerisation", "/pixel-art", "/broderie-main"):
+    for url in ("/galerie", "/numerisation", "/pixel-art", "/broderie-main", "/streamlines"):
         assert f'href="{url}"' in html
     for illustration in ("icone_gallerie.png", "icone_numeriser.png",
                          "icone_pixel.png", "icone_main.png"):
@@ -30,7 +30,8 @@ def test_the_classic_form_moved_to_its_own_page(tmp_path):
 def test_each_tool_page_sets_its_color_theme(tmp_path):
     client = _app(tmp_path).test_client()
     for path, theme in (("/galerie", "gallery"), ("/numerisation", "create"),
-                        ("/pixel-art", "cross-stitch"), ("/broderie-main", "hand-embroidery")):
+                        ("/pixel-art", "cross-stitch"), ("/broderie-main", "hand-embroidery"),
+                        ("/streamlines", "streamline")):
         response = client.get(path)
         assert response.status_code == 200
         html = response.get_data(as_text=True)

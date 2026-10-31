@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Streamlines{% endblock %}
+{% block page %}streamline{% endblock %}
+{% block theme %}streamline{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Une photo devient des <em>lignes de courant</em></h1>
+  <p>Un champ de direction suit le dessin, un champ de densité suit les couleurs : les streamlines s'espacent d'elles-mêmes puis se relâchent par ressorts.</p>
+</section>
+
+<form id="streamline-form" class="card create-card" action="{{ url_for('web.api_create_streamline') }}" data-analyse="{{ url_for('web.api_analyse') }}" novalidate>
+  <label class="dropzone" id="dropzone">
+    <input type="file" name="image" id="image-input" accept="image/png,image/jpeg,image/webp,image/avif,.avif" hidden>
+    <div class="dz-empty">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      <strong>Glissez votre photo ici</strong>
+      <span>ou collez une image copiée (Ctrl+V), ou cliquez pour parcourir</span>
+      <span>PNG, JPG, WebP ou AVIF · 20 Mo max</span>
+    </div>
+    <div class="dz-preview" hidden>
+      <img id="image-preview" alt="Aperçu de l'image">
+      <span class="dz-name" id="image-name"></span>
+      <button type="button" class="btn-ghost small" id="image-clear">Changer d'image</button>
+    </div>
+  </label>
+
+  <div class="options">
+    {% include "_colors.html" %}
+
+    <fieldset class="field size" id="size-field">
+      <legend>Taille maximale du motif <span class="spinner field-spinner" aria-hidden="true"></span></legend>
+      <div class="size-inputs">
+        <label><span>Largeur</span>
+          <span class="unit"><input type="number" name="width_mm" id="width-mm" min="{{ min_size }}" max="{{ max_size }}" step="0.1" value="{{ default_size }}" required><em>mm</em></span>
+        </label>
+        <span class="times" aria-hidden="true">×</span>
+        <label><span>Hauteur</span>
+          <span class="unit"><input type="number" name="height_mm" id="height-mm" min="{{ min_size }}" max="{{ max_size }}" step="0.1" value="{{ default_size }}" required><em>mm</em></span>
+        </label>
+      </div>
+      <p class="hint">Le motif brodé est le plus grand possible dans ce rectangle. Les streamlines gardent le rapport de la photo.</p>
+    </fieldset>
+
+    <fieldset class="field choices">
+      <legend>Arrière-plan</legend>
+      <label class="choice">
+        <input type="radio" name="background" value="outside" checked>
+        <span><strong>Supprimer le fond autour du motif</strong>
+          <small>Les zones de la même couleur à l'intérieur de la photo sont conservées et brodées.</small></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="background" value="all">
+        <span><strong>Supprimer le fond et toutes les zones de sa couleur</strong>
+          <small>Les zones intérieures de la couleur du fond restent vides (tissu apparent).</small></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="background" value="keep">
+        <span><strong>Conserver le fond</strong>
+          <small>Toute la photo est brodée, fond compris.</small></span>
+      </label>
+    </fieldset>
+
+    <details class="advanced-options">
+      <summary>Réglages des streamlines</summary>
+      <label class="select-field">
+        <span>Largeur du fil</span>
+        <span class="unit"><input type="number" id="line-width" name="line_width_mm" min="0.15" max="2" step="0.05" value="0.4"><em>mm</em></span>
+        <small class="hint">Écart réel entre deux lignes voisines. Le dépôt d'origine travaille à 0,4 mm.</small>
+      </label>
+      <label class="select-field">
+        <span>Passes de lissage</span>
+        <input type="number" id="relax-iterations" name="relax_iterations" min="4" max="40" step="1" value="14">
+        <small class="hint">Relaxation des ressorts d'alignement et d'espacement : plus de passes, lignes plus régulières.</small>
+      </label>
+      <label class="choice">
+        <input type="checkbox" id="background-fill" checked>
+        <span><strong>Passage de fond croisé</strong>
+          <small>Une couche à 90° sous le motif, comme les deux passes par région du dépôt.</small></span>
+      </label>
+    </details>
+
+    <p class="form-error" id="form-error" role="alert" hidden></p>
+
+    <button type="submit" class="btn-primary" id="submit-btn" disabled>
+      <span class="btn-label">Générer le motif</span>
+      <span class="spinner" aria-hidden="true"></span>
+    </button>
+    <div class="inline-progress" id="create-progress" role="status" aria-live="polite" hidden>
+      <span>Génération du motif en cours…</span>
+      <progress class="task-progress" aria-label="Génération du motif en cours"></progress>
+    </div>
+  </div>
+</form>
+{% endblock %}

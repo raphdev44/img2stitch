@@ -1,4 +1,5 @@
 """Remplissages portés d'Ink/Stitch : palette, géométrie et intégration au planificateur."""
+import cv2
 import numpy as np
 import pyembroidery as pe
 
@@ -130,3 +131,46 @@ def test_cross_fill_thread_count_doubles_the_row():
     pts = [runs[0]["p0"]] + runs[0]["pts"]
     if inkstitch.CROSS_THREADS > 1:
         assert pts[0] == pts[-1]   # le second brin revient au point de départ de la rangée
+
+# --- couverture réelle de la surface ----------------------------------------------------------
+def _two_blobs(n=200):
+    """Deux taches nettement séparées : un seul morceau était rempli avant le correctif."""
+    mask = np.zeros((n, n), bool)
+    inner = mask.view(np.uint8).reshape(n, n)
+    cv2.circle(inner, (60, 100), 42, 1, -1)
+    cv2.circle(inner, (150, 100), 42, 1, -1)
+    return mask
+
+
+def _annulus(n=200):
+    """Couronne percée : le bord du trou n'était jamais rempli avant le correctif."""
+    mask = np.zeros((n, n), bool)
+    inner = mask.view(np.uint8).reshape(n, n)
+    cv2.circle(inner, (100, 100), 88, 1, -1)
+    cv2.circle(inner, (100, 100), 38, 0, -1)
+    return mask
+
+
+def _coverage(mask, runs, ppm=10, width_mm=0.4):
+    """Part de la forme réellement couverte par les points piqués."""
+    canvas = np.zeros(mask.shape, np.uint8)
+    for run in runs:
+        pts = [run["p0"]] + run.get("pts", [run["p1"]])
+        for a, b in zip(pts, pts[1:]):
+            cv2.line(canvas, (round(a[0] * ppm), round(a[1] * ppm)),
+                     (round(b[0] * ppm), round(b[1] * ppm)), 255, max(1, round(width_mm * ppm)))
+    return float(((canvas > 0) & mask).sum()) / max(1, mask.sum())
+
+
+def test_contour_fill_covers_every_lobe_and_the_side_of_a_hole():
+    # Avant le correctif : 40 % sur deux taches, 33 % sur un anneau (la spirale suivait un seul
+    # morceau, et le bord du trou au lieu de la couronne). Le tatami sert de référence : 91-95 %.
+    for mask in (_two_blobs(), _annulus()):
+        runs = [r for _, data in zone_fill("inkstitch_contour", mask, 10, SETTINGS) for r in data]
+        assert _coverage(mask, runs) > 0.85
+
+
+def test_contour_fill_keeps_one_spiral_per_lobe():
+    # Deux taches = deux spirales distinctes, et non une seule qui saute de l'une à l'autre.
+    runs = [r for _, data in zone_fill("inkstitch_contour", _two_blobs(), 10, SETTINGS) for r in data]
+    assert len({r["comp"] for r in runs}) >= 2
