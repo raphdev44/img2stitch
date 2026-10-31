@@ -1,0 +1,461 @@
+[
+ {
+  "path": "instance/designs\\04312bd2bf9940e5853d3e3b7cec973c\\source.png",
+  "standard": {
+   "stitches": 5201,
+   "jumps": 23,
+   "trims": 22,
+   "color_changes": 1,
+   "seconds": 1.25
+  },
+  "vector": {
+   "stitches": 6327,
+   "jumps": 63,
+   "trims": 30,
+   "color_changes": 1,
+   "seconds": 2.34
+  },
+  "appearance": {
+   "to_vector": 0.09,
+   "to_standard": 0.0,
+   "coverage_standard": 13.4,
+   "coverage_vector": 16.6
+  },
+  "threads": [
+   2,
+   2
+  ]
+ },
+ {
+  "path": "instance/designs\\50d894507a784a87939efbd0e0c75a7e\\source.png",
+  "standard": {
+   "stitches": 17022,
+   "jumps": 260,
+   "trims": 168,
+   "color_changes": 2,
+   "seconds": 2.31
+  },
+  "vector": {
+   "stitches": 18460,
+   "jumps": 300,
+   "trims": 141,
+   "color_changes": 2,
+   "seconds": 7.61
+  },
+  "appearance": {
+   "to_vector": 1.35,
+   "to_standard": 0.06,
+   "coverage_standard": 23.6,
+   "coverage_vector": 27.1
+  },
+  "threads": [
+   3,
+   3
+  ]
+ },
+ {
+  "path": "instance/designs\\545d7d0fc9604812a1101bcd7d8e776b\\source.png",
+  "standard": {
+   "stitches": 15439,
+   "jumps": 218,
+   "trims": 144,
+   "color_changes": 3,
+   "seconds": 4.92
+  },
+  "vector": {
+   "stitches": 17771,
+   "jumps": 276,
+   "trims": 146,
+   "color_changes": 3,
+   "seconds": 8.7
+  },
+  "appearance": {
+   "to_vector": 1.28,
+   "to_standard": 0.2,
+   "coverage_standard": 18.6,
+   "coverage_vector": 22.0
+  },
+  "threads": [
+   4,
+   4
+  ]
+ },
+ {
+  "path": "instance/designs\\6ee3df932dde48a1bc157f438bb1a825\\source.png",
+  "standard": {
+   "stitches": 9155,
+   "jumps": 155,
+   "trims": 113,
+   "color_changes": 2,
+   "seconds": 1.86
+  },
+  "vector": {
+   "stitches": 11009,
+   "jumps": 210,
+   "trims": 125,
+   "color_changes": 2,
+   "seconds": 6.24
+  },
+  "appearance": {
+   "to_vector": 0.5,
+   "to_standard": 0.65,
+   "coverage_standard": 15.9,
+   "coverage_vector": 19.4
+  },
+  "threads": [
+   3,
+   3
+  ]
+ },
+ {
+  "path": "instance/designs\\91792f430b114e838e9cb89789fc2acb\\source.png",
+  "standard": {
+   "stitches": 6529,
+   "jumps": 158,
+   "trims": 82,
+   "color_changes": 0,
+   "seconds": 1.45
+  },
+  "vector": {
+   "stitches": 7830,
+   "jumps": 196,
+   "trims": 91,
+   "color_changes": 0,
+   "seconds": 5.92
+  },
+  "appearance": {
+   "to_vector": 0.12,
+   "to_standard": 0.02,
+   "coverage_standard": 9.3,
+   "coverage_vector": 12.7
+  },
+  "threads": [
+   1,
+   1
+  ]
+ },
+ {
+  "path": "instance/designs\\989806b367534cc2bb40ecc3c97ace71\\source.png",
+  "standard": {
+   "stitches": 4969,
+   "jumps": 21,
+   "trims": 19,
+   "color_changes": 1,
+   "seconds": 0.93
+  },
+  "vector": {
+   "stitches": 5911,
+   "jumps": 51,
+   "trims": 28,
+   "color_changes": 1,
+   "seconds": 1.83
+  },
+  "appearance": {
+   "to_vector": 0.03,
+   "to_standard": 0.0,
+   "coverage_standard": 17.2,
+   "coverage_vector": 19.9
+  },
+  "threads": [
+   2,
+   2
+  ]
+ },
+ {
+  "path": "instance/designs\\b33af327fbe14c9b84d988e6936ec5e7\\source.png",
+  "standard": {
+   "stitches": 26883,
+   "jumps": 276,
+   "trims": 193,
+   "color_changes": 3,
+   "seconds": 6.34
+  },
+  "vector": {
+   "stitches": 29576,
+   "jumps": 354,
+   "trims": 194,
+   "color_changes": 3,
+   "seconds": 15.63
+  },
+  "appearance": {
+   "to_vector": 2.82,
+   "to_standard": 0.76,
+   "coverage_standard": 39.3,
+   "coverage_vector": 44.0
+  },
+  "threads": [
+   4,
+   4
+  ]
+ },
+ {
+  "path": "instance/designs\\b9ea88ea840c43c0ac1cfc837ed1d338\\source.png",
+  "standard": {
+   "stitches": 9155,
+   "jumps": 155,
+   "trims": 113,
+   "color_changes": 2,
+   "seconds": 1.91
+  },
+  "vector": {
+   "stitches": 11009,
+   "jumps": 210,
+   "trims": 125,
+   "color_changes": 2,
+   "seconds": 6.32
+  },
+  "appearance": {
+   "to_vector": 0.5,
+   "to_standard": 0.65,
+   "coverage_standard": 15.9,
+   "coverage_vector": 19.4
+  },
+  "threads": [
+   3,
+   3
+  ]
+ },
+ {
+  "path": "instance/designs\\c3357f3b60504ce39dc3daf343f700bc\\source.png",
+  "standard": {
+   "stitches": 12176,
+   "jumps": 104,
+   "trims": 80,
+   "color_changes": 3,
+   "seconds": 1.96
+  },
+  "vector": {
+   "stitches": 14305,
+   "jumps": 177,
+   "trims": 108,
+   "color_changes": 3,
+   "seconds": 6.84
+  },
+  "appearance": {
+   "to_vector": 1.89,
+   "to_standard": 0.82,
+   "coverage_standard": 34.4,
+   "coverage_vector": 38.9
+  },
+  "threads": [
+   4,
+   4
+  ]
+ },
+ {
+  "path": "instance/designs\\c9252f4d77764d839cde45734fe7fb90\\source.png",
+  "standard": {
+   "stitches": 12846,
+   "jumps": 75,
+   "trims": 59,
+   "color_changes": 1,
+   "seconds": 1.81
+  },
+  "vector": {
+   "stitches": 13399,
+   "jumps": 75,
+   "trims": 54,
+   "color_changes": 1,
+   "seconds": 6.3
+  },
+  "appearance": {
+   "to_vector": 1.3,
+   "to_standard": 0.99,
+   "coverage_standard": 18.5,
+   "coverage_vector": 19.4
+  },
+  "threads": [
+   2,
+   2
+  ]
+ },
+ {
+  "path": "examples/exemple.png",
+  "standard": {
+   "stitches": 4613,
+   "jumps": 12,
+   "trims": 12,
+   "color_changes": 2,
+   "seconds": 0.96
+  },
+  "vector": {
+   "stitches": 5174,
+   "jumps": 23,
+   "trims": 13,
+   "color_changes": 2,
+   "seconds": 3.42
+  },
+  "appearance": {
+   "to_vector": 0.17,
+   "to_standard": 0.2,
+   "coverage_standard": 19.7,
+   "coverage_vector": 21.1
+  },
+  "threads": [
+   3,
+   3
+  ]
+ },
+ {
+  "path": ".freebuff\\bench\\corpus_images\\anneau.png",
+  "standard": {
+   "stitches": 5397,
+   "jumps": 3,
+   "trims": 3,
+   "color_changes": 1,
+   "seconds": 1.71
+  },
+  "vector": {
+   "stitches": 5833,
+   "jumps": 18,
+   "trims": 5,
+   "color_changes": 1,
+   "seconds": 1.84
+  },
+  "appearance": {
+   "to_vector": 0.05,
+   "to_standard": 0.01,
+   "coverage_standard": 20.3,
+   "coverage_vector": 20.9
+  },
+  "threads": [
+   2,
+   2
+  ]
+ },
+ {
+  "path": ".freebuff\\bench\\corpus_images\\bandes.png",
+  "standard": {
+   "stitches": 4639,
+   "jumps": 6,
+   "trims": 6,
+   "color_changes": 0,
+   "seconds": 1.44
+  },
+  "vector": {
+   "stitches": 5436,
+   "jumps": 7,
+   "trims": 7,
+   "color_changes": 0,
+   "seconds": 5.12
+  },
+  "appearance": {
+   "to_vector": 0.0,
+   "to_standard": 0.0,
+   "coverage_standard": 11.1,
+   "coverage_vector": 12.6
+  },
+  "threads": [
+   1,
+   1
+  ]
+ },
+ {
+  "path": ".freebuff\\bench\\corpus_images\\degrade.png",
+  "standard": {
+   "stitches": 7516,
+   "jumps": 0,
+   "trims": 0,
+   "color_changes": 3,
+   "seconds": 1.16
+  },
+  "vector": {
+   "stitches": 8311,
+   "jumps": 2,
+   "trims": 2,
+   "color_changes": 3,
+   "seconds": 2.42
+  },
+  "appearance": {
+   "to_vector": 0.0,
+   "to_standard": 0.0,
+   "coverage_standard": 32.9,
+   "coverage_vector": 34.4
+  },
+  "threads": [
+   4,
+   4
+  ]
+ },
+ {
+  "path": ".freebuff\\bench\\corpus_images\\flou.png",
+  "standard": {
+   "stitches": 9006,
+   "jumps": 3,
+   "trims": 2,
+   "color_changes": 3,
+   "seconds": 3.61
+  },
+  "vector": {
+   "stitches": 10149,
+   "jumps": 35,
+   "trims": 11,
+   "color_changes": 3,
+   "seconds": 2.99
+  },
+  "appearance": {
+   "to_vector": 0.98,
+   "to_standard": 0.43,
+   "coverage_standard": 25.5,
+   "coverage_vector": 27.1
+  },
+  "threads": [
+   4,
+   4
+  ]
+ },
+ {
+  "path": ".freebuff\\bench\\corpus_images\\texte.png",
+  "standard": {
+   "stitches": 10710,
+   "jumps": 112,
+   "trims": 101,
+   "color_changes": 3,
+   "seconds": 42.0
+  },
+  "vector": {
+   "stitches": 12197,
+   "jumps": 157,
+   "trims": 112,
+   "color_changes": 3,
+   "seconds": 80.43
+  },
+  "appearance": {
+   "to_vector": 0.31,
+   "to_standard": 0.44,
+   "coverage_standard": 3.5,
+   "coverage_vector": 3.9
+  },
+  "threads": [
+   4,
+   4
+  ]
+ },
+ {
+  "path": ".freebuff\\bench\\corpus_images\\triangle.png",
+  "standard": {
+   "stitches": 4406,
+   "jumps": 4,
+   "trims": 4,
+   "color_changes": 2,
+   "seconds": 1.14
+  },
+  "vector": {
+   "stitches": 4942,
+   "jumps": 45,
+   "trims": 10,
+   "color_changes": 2,
+   "seconds": 4.53
+  },
+  "appearance": {
+   "to_vector": 1.16,
+   "to_standard": 1.28,
+   "coverage_standard": 14.3,
+   "coverage_vector": 15.2
+  },
+  "threads": [
+   3,
+   3
+  ]
+ }
+]

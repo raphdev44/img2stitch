@@ -1,6 +1,7 @@
 """Canal « broderie à la main » : création, formulaire, motif non modifiable."""
 import io
 import time
+from html import unescape
 
 from PIL import Image, ImageDraw
 
@@ -83,6 +84,44 @@ def test_the_page_offers_the_hand_form(tmp_path):
     assert 'name="height_mm"' in html
     assert "Très décoratif" in html
     assert "Automatique" in html
+    assert 'id="stitch-help-trigger"' in html
+    assert '<dialog class="stitch-help"' in html
+    assert html.count('class="stitch-sample"') == 27
+    assert 'loading="lazy"' in html
+    assert "/api/broderie-main/exemples/running.png" in html
+    for stitch in ("Point avant", "Point arrière", "Point de tige", "Point fendu",
+                   "Point de chaînette", "Point posé", "Point de croix", "Point de reprisage",
+                   "Point passé", "Point d'arête", "Point de filet", "Point chevron",
+                   "Point de fougère", "Point de plume", "Point crétois", "Point de feston",
+                   "Point de graine", "Nœud français", "Point de poste", "Point de marguerite",
+                   "Roue enroulée", "Toile d'araignée", "Tulipe",
+                   "Point de surjet", "Point en E", "Chaînette fléchée", "Point de résille"):
+        assert stitch in unescape(html)
+
+
+def test_stitch_sample_endpoint_returns_a_photo_preview(tmp_path):
+    from PIL import Image
+    from webapp import create_app
+
+    app = create_app({"TESTING": True, "DESIGNS_DIR": str(tmp_path)})
+    response = app.test_client().get("/api/broderie-main/exemples/chain.png")
+    assert response.status_code == 200
+    assert response.mimetype == "image/png"
+    assert response.headers["Cache-Control"].startswith("public, max-age=86400")
+    with Image.open(io.BytesIO(response.data)) as image:
+        assert image.format == "PNG"
+        assert image.width > 500 and image.height > 100
+    assert app.test_client().get("/api/broderie-main/exemples/unknown.png").status_code == 404
+
+
+def test_every_hand_stitch_sample_has_stitches():
+    from img2stitch.hand import hand_stitch_sample_pattern
+    from img2stitch.handstitch import STITCH_TYPES
+
+    for kind in STITCH_TYPES:
+        pattern = hand_stitch_sample_pattern(kind)
+        assert len(pattern.stitches) > 2, kind
+        assert len(pattern.threadlist) == 1, kind
 
 
 def test_a_sober_motif_keeps_the_classic_stitches(tmp_path, monkeypatch):

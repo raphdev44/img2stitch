@@ -239,6 +239,22 @@
       }
     }
 
+    const helpTrigger = $("#stitch-help-trigger");
+    const helpDialog = $("#stitch-help");
+    if (helpTrigger && helpDialog) {
+      helpTrigger.addEventListener("click", () => helpDialog.showModal());
+      $(".stitch-help-close", helpDialog).addEventListener("click", () => helpDialog.close());
+      helpDialog.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          helpDialog.close();
+        }
+      });
+      helpDialog.addEventListener("click", (event) => {
+        if (event.target === helpDialog) helpDialog.close();
+      });
+    }
+
     const showError = (msg) => { err.textContent = msg; err.hidden = !msg; };
     const bgValue = () => $("input[name=background]:checked", form).value;
 
@@ -694,6 +710,9 @@
       relief_triskele: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9.3 L12.63 8.83 L13.43 8.52 L14.37 8.42 L15.39 8.57 L16.43 9 L17.41 9.71 L18.27 10.69 L18.94 11.93 L19.34 13.37 L19.43 14.96 M14.34 13.35 L14.43 14.13 L14.3 14.98 L13.91 15.84 L13.27 16.65 L12.39 17.34 L11.28 17.84 L10 18.09 L8.6 18.05 L7.14 17.68 L5.72 16.96 M9.66 13.35 L8.94 13.04 L8.27 12.5 L7.72 11.74 L7.34 10.78 L7.19 9.67 L7.31 8.46 L7.73 7.22 L8.47 6.03 L9.51 4.96 L10.85 4.08 M12 12 m-1.15 0a1.15 1.15 0 1 0 2.3 0a1.15 1.15 0 1 0-2.3 0"/></svg>',
       relief_entrelacs: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.2 7.8 L13.9 8.7 L14.5 9.7 L14.9 10.8 L15 12 L14.9 13.2 L14.5 14.3 L13.9 15.3 L13.2 16.2 L12.2 16.9 L11.1 17.4 L10 17.7 L8.8 17.7 L7.7 17.5 L6.6 17 L5.6 16.3 L4.8 15.5 L4.2 14.5 L3.8 13.4 L3.6 12.2 L3.7 11 L4 9.9 L4.5 8.9 L5.3 8 L6.2 7.2 L7.3 6.7 L8.4 6.4 L9.6 6.3 L10.7 6.5 M10.8 16.2 L10.1 15.3 L9.5 14.3 L9.1 13.2 L9 12 L9.1 10.8 L9.5 9.7 L10.1 8.7 L10.8 7.8 L11.8 7.1 L12.9 6.6 L14 6.3 L15.2 6.3 L16.3 6.5 L17.4 7 L18.4 7.7 L19.2 8.5 L19.8 9.5 L20.2 10.6 L20.4 11.8 L20.3 13 L20 14.1 L19.5 15.1 L18.7 16 L17.8 16.8 L16.7 17.3 L15.6 17.6 L14.4 17.7 L13.3 17.5" stroke-linejoin="round"/></svg>',
       relief_vermicelle: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M0.8 6.2q2.6 4.2 5.2 0t5.2 0 5.2 0 5.2 0M2.4 13.4q2.8-4.6 5.6 0t5.6 0 5.6 0 5.6 0M0.8 20.4q2.6 4.2 5.2 0t5.2 0 5.2 0 5.2 0 M4.4 9.8q2.4 3.6 4.8 0t4.8 0M13.6 17q2.4-3.6 4.8 0t4.8 0" stroke-linejoin="round"/></svg>',
+      inkstitch_contour: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.2 6Q6 2.6 12 2.6Q18 2.6 20.8 6Q22.6 9.8 20.8 13.2Q18 19.4 12 19.4Q6 19.4 3.2 13.2Q1.4 9.8 3.2 6Z M6.1 7.9Q8.2 5.4 12 5.4Q15.8 5.4 17.9 7.9Q19.2 10.6 17.9 12.9Q15.8 16.4 12 16.4Q8.2 16.4 6.1 12.9Q4.8 10.6 6.1 7.9Z M8.9 9.6Q10.2 8.2 12 8.2Q13.8 8.2 15.1 9.6Q15.7 11 15.1 12.2Q13.8 13.6 12 13.6Q10.2 13.6 8.9 12.2Q8.3 11 8.9 9.6Z" stroke-linejoin="round"/></svg>',
+      inkstitch_circular: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6A9.4 9.4 0 1 1 4.1 16.4 M12 5.8A6.2 6.2 0 1 0 6.3 13.4 M12 9.1A2.9 2.9 0 1 1 9.5 13.6" stroke-linejoin="round"/></svg>',
+      inkstitch_cross: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 2 L10 10 M10 2 L2 10 M14 2 L22 10 M22 2 L14 10 M2 14 L10 22 M10 14 L2 22 M14 14 L22 22 M22 14 L14 22"/></svg>',
     };
     const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${FILL_ICONS[k] || ""}</svg>`;
     const changed = (i) => edits[i].color !== zones[i].color || edits[i].fill !== zones[i].fill
@@ -938,14 +957,21 @@
     $("#zm-picker").addEventListener("input", (e) => setColor(e.target.value));
     $("#zm-picker").addEventListener("change", () => renderPalette());
 
+    // Trois sections dans la liste : les remplissages classiques, les reliefs et ceux
+    // portés d'Ink/Stitch. Le préfixe de la clé décide de la section.
+    const fillSection = (k) => (k.startsWith("relief_") ? "relief" : k.startsWith("inkstitch_") ? "inkstitch" : "normal");
+    const FILL_SECTIONS = { normal: "Normal", relief: "En relief", inkstitch: "Ink/Stitch" };
+
     function renderFills() {
       const items = [];
+      let section = null;
       fillList.forEach(([k, label]) => {
-        const relief = k.startsWith("relief_");
-        if (relief && !items.some((el) => el.classList.contains("zm-group"))) {
+        const group = fillSection(k);
+        if (group !== section) {
+          section = group;
           const h = document.createElement("p");
           h.className = "zm-label zm-group";
-          h.textContent = "En relief";
+          h.textContent = FILL_SECTIONS[group];
           items.push(h);
         }
         const b = document.createElement("button");
@@ -953,7 +979,7 @@
         b.className = "zm-fill";
         b.setAttribute("role", "radio");
         b.setAttribute("aria-checked", String(k === cur().fill));
-        const shown = relief ? label.replace(/^Relief : (.)/, (_, c) => c.toUpperCase()) : label;
+        const shown = label.replace(/^(Relief|Ink\/Stitch) : (.)/, (_, group, c) => c.toUpperCase());
         b.innerHTML = `${icon(k)}<span>${shown}</span>${k === "tatami" ? "<em>par défaut</em>" : ""}`;
         b.addEventListener("click", () => {
           cur().fill = k;

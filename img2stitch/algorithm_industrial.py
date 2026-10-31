@@ -40,7 +40,6 @@ import cv2
 import numpy as np
 import pyembroidery as pe
 
-from .outline import overlap_masks
 from .preprocess import load_and_quantize
 from .algorithm_vectorize import explode, lines_of, polygons_of
 
@@ -51,7 +50,7 @@ PHI = 0.6180339887
 @dataclass
 class IndustrialParams:
     """Réglages du moteur. Les défauts visent le polo / casquette en 40 wt sur machine ~700-850 pts/min."""
-    pull_mm: float = 0.25            # compensation de tension (les formes débordent sous le fil voisin)
+    pull_mm: float = 0.12            # compensation de tension, vers le tissu nu uniquement (pas de double dilatation)
     spacing_floor_mm: float = 0.40   # densité plancher : en dessous, casse de fil et plaque rigide
     fill_stitch_mm: float = 3.6      # pas du remplissage (pénétrations décalées)
     max_stitch_mm: float = 4.5       # plafond des liens, contours et déplacements
@@ -62,13 +61,16 @@ class IndustrialParams:
     short_jump_mm: float = 2.0       # saut sans coupe toléré en dessous (flottant court, invisible)
     trim_penalty: float = 45.0       # coût d'une coupe, en « points équivalents » (≈ 3,5 s à 800 pts/min)
     max_link_mm: float = 3.0         # lien maximal entre deux rangées voisines
+    rim_mm: float = 0.5              # liseré de bord où le fil peut courir sans se voir (comme un petit contour)
+    own_short_mm: float = 3.0        # déplacement direct toléré sur la zone déjà piquée (même fil, court)
+    free_angle: bool = False         # True : choisit l'angle de hachure forme par forme (rendu moins uniforme)
     underlay: str = "auto"           # "auto" | "edge" | "none"
     underlay_inset_mm: float = 0.5
     underlay_step_mm: float = 3.0
     edge_min_mm2: float = 10.0       # sous-couche contour à partir de cette surface
-    lattice_min_mm2: float = 90.0    # treillis perpendiculaire à partir de cette surface
+    lattice_min_mm2: float = 200.0   # treillis perpendiculaire à partir de cette surface
     lattice_spacing_mm: float = 2.4
-    thin_width_mm: float = 1.0       # largeur sous laquelle la forme devient une ligne
+    thin_width_mm: float = 0.8       # largeur sous laquelle la forme devient une ligne
     thin_passes: int = 3             # 1 ou 3 (3 = triple point, finit à l'autre extrémité)
     thin_step_mm: float = 2.0
     satin_like_max_mm: float = 6.0   # petite dimension max pour piquer « en travers »
@@ -136,22 +138,36 @@ def schedule_zones(threads, masks, px_per_mm, overlap_mm):
 class Cover:
     """Zones où un déplacement piqué est invisible (zone courante + couleurs piquées ensuite)."""
 
-    def __init__(self, hidden, px_per_mm, cell_mm=0.3):
-        self.m = hidden
+    def __init__(self, hidden, px_per_mm, cell_mm=0.25, own=None):
+        self.m = hidden          # zones où un fil flottant est invisible (couleurs suivantes + liseré de la zone)
+        self.own = hidden if own is None else own   # toute la zone courante : seulement pour de courts trajets
         self.ppm = px_per_mm
         self.f = max(1, round(cell_mm * px_per_mm))
         self.cs = self.f / px_per_mm
         self._coarse = None
         self._labels = None
 
-    def covered(self, p, q):
+    def with_extra(self, polys, grow_px=3):
+        """Copie de ce Cover où `polys` (Shapely, en mm) comptent aussi comme couverts : ce que la couche
+        piquée juste après (le remplissage de la forme) recouvrira."""
+        extra = np.zeros(self.m.shape, np.uint8)
+        conv = lambda ring: np.array([[x * self.ppm, y * self.ppm] for x, y in ring.coords], np.int32)
+        for g in polys:
+            cv2.fillPoly(extra, [conv(g.exterior)], 1)
+            for hole in g.interiors:
+                cv2.fillPoly(extra, [conv(hole)], 0)
+        extra = cv2.dilate(extra, np.ones((2 * grow_px + 1, 2 * grow_px + 1), np.uint8)).astype(bool)
+        return Cover(self.m | extra, self.ppm, own=self.own)
+
+    def covered(self, p, q, own=False):
+        m = self.own if own else self.m
         n = max(1, int(_dist(p, q) / 0.4) + 1)
         xs = np.rint(np.linspace(p[0], q[0], n + 1) * self.ppm).astype(int)
         ys = np.rint(np.linspace(p[1], q[1], n + 1) * self.ppm).astype(int)
         h, w = self.m.shape
         if xs.min() < 0 or ys.min() < 0 or xs.max() >= w or ys.max() >= h:
             return False
-        return bool(self.m[ys, xs].all())
+        return bool(m[ys, xs].all())
 
     def _grid(self):
         if self._coarse is None:
@@ -381,6 +397,78 @@ def _decimate(pts, step, tol=0.15):
     return out
 
 
+# --- Déliés : squelette -------------------------------------------------------------------------------
+def _thin_zs(img):
+    """Amincissement de Zhang-Suen (NumPy, sans dépendance) : squelette d'épaisseur 1 px."""
+    img = img.astype(np.uint8).copy()
+    changed = True
+    while changed:
+        changed = False
+        for step in (0, 1):
+            P = np.pad(img, 1)
+            p2, p3, p4, p5 = P[:-2, 1:-1], P[:-2, 2:], P[1:-1, 2:], P[2:, 2:]
+            p6, p7, p8, p9 = P[2:, 1:-1], P[2:, :-2], P[1:-1, :-2], P[:-2, :-2]
+            nb = p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9
+            seq = [p2, p3, p4, p5, p6, p7, p8, p9, p2]
+            a = sum(((seq[i] == 0) & (seq[i + 1] == 1)).astype(np.uint8) for i in range(8))
+            c = ((p2 * p4 * p6 == 0) & (p4 * p6 * p8 == 0)) if step == 0 else ((p2 * p4 * p8 == 0) & (p2 * p6 * p8 == 0))
+            m = (img == 1) & (nb >= 2) & (nb <= 6) & (a == 1) & c
+            if m.any():
+                img[m] = 0
+                changed = True
+    return img
+
+
+def _trace(sk):
+    """Squelette (bool) -> liste de chemins de pixels (lignes entre extrémités / carrefours)."""
+    pts = {tuple(p) for p in np.argwhere(sk)}
+    dirs = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+    nbr = {p: [(p[0] + dy, p[1] + dx) for dy, dx in dirs if (p[0] + dy, p[1] + dx) in pts] for p in pts}
+    used, paths = set(), []
+
+    def walk(a, b):
+        path = [a, b]
+        used.add((a, b)); used.add((b, a))
+        while len(nbr[path[-1]]) == 2:
+            nxt = [n for n in nbr[path[-1]] if n != path[-2] and (path[-1], n) not in used]
+            if not nxt:
+                break
+            used.add((path[-1], nxt[0])); used.add((nxt[0], path[-1]))
+            path.append(nxt[0])
+        return path
+
+    for p in sorted(pts):
+        if len(nbr[p]) != 2:
+            for n in nbr[p]:
+                if (p, n) not in used:
+                    paths.append(walk(p, n))
+    for p in sorted(pts):            # boucles fermées (aucun carrefour)
+        for n in nbr[p]:
+            if (p, n) not in used:
+                paths.append(walk(p, n))
+    return paths
+
+
+def skeleton_lines(poly, px_per_mm=20, min_len_mm=0.8, simplify_mm=0.08):
+    """Lignes médianes d'un polygone fin (mm). Fonctionne sur n'importe quelle courbe, anneaux compris."""
+    from shapely.geometry import LineString
+    minx, miny, maxx, maxy = poly.bounds
+    S, pad = px_per_mm, 3
+    w, h = int((maxx - minx) * S) + 2 * pad + 2, int((maxy - miny) * S) + 2 * pad + 2
+    img = np.zeros((h, w), np.uint8)
+    conv = lambda ring: np.array([[(x - minx) * S + pad, (y - miny) * S + pad] for x, y in ring.coords], np.int32)
+    cv2.fillPoly(img, [conv(poly.exterior)], 1)
+    for hole in poly.interiors:
+        cv2.fillPoly(img, [conv(hole)], 0)
+    out = []
+    for path in _trace(_thin_zs(img).astype(bool)):
+        pts = [((c - pad) / S + minx, (r - pad) / S + miny) for r, c in path]
+        line = LineString(pts).simplify(simplify_mm)
+        if line.length >= min_len_mm:
+            out.append(list(line.coords))
+    return out
+
+
 # --- Machine : émission des points -----------------------------------------------------------------
 class Stitcher:
     """Pose les points dans le motif (coordonnées en mm -> 1/10 mm) et décide de chaque déplacement."""
@@ -451,6 +539,9 @@ class Stitcher:
         if d < P.min_stitch_mm:
             return
         if d <= P.max_travel_mm and self.cover.covered(p, q):
+            self.sew([q], P.travel_stitch_mm)
+            return
+        if d <= P.own_short_mm and self.cover.covered(p, q, own=True):
             self.sew([q], P.travel_stitch_mm)
             return
         if d <= P.short_jump_mm:
@@ -527,6 +618,8 @@ class Stitcher:
         axis = _principal(poly) if not list(poly.interiors) else None
         if axis and axis[1] / max(axis[2], 1e-6) >= 2.2 and axis[2] <= P.satin_like_max_mm:
             return axis[0] + 90.0, None
+        if not P.free_angle:
+            return base_angle, None
         cands = [base_angle, base_angle + 90.0]
         if axis and axis[1] / max(axis[2], 1e-6) >= 1.4:
             cands += [axis[0], axis[0] + 90.0]
@@ -540,37 +633,34 @@ class Stitcher:
                 best = (score, ang, runs)
         return (best[1], best[2]) if best else (base_angle, None)
 
-    def sew_thin(self, poly):
-        """Forme fine : ligne médiane. Retourne False si rien n'a pu être piqué."""
+    def sew_lines(self, lines):
+        """Déliés : chaque ligne médiane en triple point, par plus proche voisin."""
+        lines = [list(l) for l in lines]
+        while lines:
+            if self.cur is None:
+                best = (0.0, 0, False)
+            else:
+                best = min(((self.trans_cost(self.cur, e) + 0.02 * _dist(self.cur, e), i, rev)
+                            for i, l in enumerate(lines) for rev, e in ((False, l[0]), (True, l[-1]))))
+            _, i, rev = best
+            line = lines.pop(i)
+            self.sew_line(line[::-1] if rev else line, self.P.thin_passes)
+
+    def split_thin(self, poly):
+        """(pleins, déliés) : les pleins sont remplis, les déliés (< thin_width_mm) réduits à leur squelette."""
         P = self.P
-        lines = []
-        if list(poly.interiors):   # anneau fin : la ligne médiane est l'extérieur rentré d'une demi-largeur
-            from shapely.geometry import Polygon
-            w = 2 * poly.area / max(poly.length, 1e-6)
-            for g in explode(Polygon(poly.exterior).buffer(-w / 2, join_style=1, quad_segs=4)):
-                lines.append(list(g.exterior.coords))
-        else:
-            axis = _principal(poly)
-            ang = (axis[0] if axis else 0.0) + 90.0
-            runs = sorted(hatch_runs(poly, ang, 0.7, 0.0))
-            a = math.radians(ang)
-            d, n = (math.cos(a), math.sin(a)), (-math.sin(a), math.cos(a))
-            cur = []
-            for k, ta, tb in runs:
-                t = (ta + tb) / 2
-                q = (n[0] * k * 0.7 + d[0] * t, n[1] * k * 0.7 + d[1] * t)
-                if cur and _dist(cur[-1], q) > 2.5:
-                    lines.append(cur)
-                    cur = []
-                cur.append(q)
-            if cur:
-                lines.append(cur)
-        done = False
-        for pts in lines:
-            if sum(_dist(pts[i], pts[i + 1]) for i in range(len(pts) - 1)) >= 1.0:
-                self.sew_line(pts, P.thin_passes)
-                done = True
-        return done
+        r = P.thin_width_mm / 2
+        thick = poly.buffer(-r, join_style=1, quad_segs=4).buffer(r + 0.02, join_style=1, quad_segs=4).intersection(poly)
+        if thick.area >= 0.985 * poly.area:
+            return [poly], []
+        parts = [g for g in explode(thick) if g.area >= P.tiny_mm2]
+        thin = []
+        for g in explode(poly.difference(thick)):
+            # une vraie partie fine, pas une frange le long d'un bord
+            if g.area >= 0.25 and not g.buffer(-0.12).is_empty:
+                thin.append(g)
+        lines = [l for g in thin for l in skeleton_lines(g)]
+        return parts, lines
 
     def underlay(self, poly, angle):
         P = self.P
@@ -588,28 +678,45 @@ class Stitcher:
                 self.emit_strokes(strokes)
 
     def sew_job(self, job, kind, base_angle, spacing, outline_passes):
+        """Une forme, dans l'ordre qui rend les déplacements gratuits :
+        1. sous-couche et déliés (le remplissage les recouvrira : on peut se déplacer sur les pleins),
+        2. pleins, 3. contours."""
         from shapely.prepared import prep
 
         P = self.P
         poly, loops = job["poly"], job["loops"]
+        all_thin = False
         if poly is not None and kind not in ("none", "contour"):
-            prepared = prep(poly.buffer(0.3))
-            w = 2 * poly.area / max(poly.length, 1e-6)
-            if poly.area < P.tiny_mm2 or w < P.thin_width_mm:
-                if self.sew_thin(poly) or poly.area < P.tiny_mm2:
-                    return                # la ligne médiane tient lieu de contour
-            angle, runs = self.choose_angle(poly, prepared, kind, base_angle, spacing)
-            self.underlay(poly, angle)
-            strokes, _, _ = self.fill_strokes(poly, prepared, angle, spacing, self.fill_stitch, self.cur, runs)
-            if not strokes:               # forme trop étroite pour une rangée
-                self.sew_thin(poly)
-            self.emit_strokes(strokes)
+            parts, lines = self.split_thin(poly)
+            if poly.area < P.tiny_mm2:
+                parts, lines = [], skeleton_lines(poly)
+            base = self.cover
+            plans = []
+            for part in parts:
+                prepared = prep(part.buffer(0.3))
+                angle, runs = self.choose_angle(part, prepared, kind, base_angle, spacing)
+                plans.append((part, prepared, angle, runs))
+            if plans and (lines or any(p[0].area >= P.edge_min_mm2 for p in plans)):
+                self.cover = base.with_extra([p[0] for p in plans])      # phase « sous le remplissage »
+            for part, _, angle, _ in plans:
+                self.underlay(part, angle)
+            if lines:
+                self.sew_lines(lines)
+            self.cover = base
+            for part, prepared, angle, runs in plans:
+                strokes, _, _ = self.fill_strokes(part, prepared, angle, spacing, self.fill_stitch, self.cur, runs)
+                if strokes:
+                    self.emit_strokes(strokes)
+                else:                    # trop étroit pour une rangée : ligne médiane
+                    self.sew_lines(skeleton_lines(part))
+            all_thin = not parts
         elif poly is not None and kind == "contour":
             for g in explode(poly.buffer(-max(0.4, spacing * 0.6), join_style=1, quad_segs=4)):
                 for ring in [g.exterior] + list(g.interiors):
                     self.sew_loop(list(ring.coords)[:-1], P.outline_step_mm)
-        for ring in loops:
-            self.sew_loop(ring, P.outline_step_mm, outline_passes)
+        if not all_thin:
+            for ring in loops:
+                self.sew_loop(ring, P.outline_step_mm, outline_passes)
 
 
 # --- Assemblage ------------------------------------------------------------------------------------
@@ -676,7 +783,6 @@ def build_industrial_pattern(path, settings):
     if settings.merge_same_colors or P.force_color_grouping:
         order = schedule_zones([c for c, _, _ in looks], masks, px_per_mm, settings.overlap_mm)
         palette, masks, regions, looks = ([lst[k] for k in order] for lst in (palette, masks, regions, looks))
-    fill_masks = overlap_masks(masks, px_per_mm, settings.overlap_mm)
 
     later = [None] * len(masks)
     acc = np.zeros_like(masks[0])
@@ -692,10 +798,15 @@ def build_industrial_pattern(path, settings):
     min_area = max(0.5, settings.min_area_mm2)
     spacing = max(P.spacing_floor_mm, settings.row_spacing_mm)
 
-    for i, (rgb, mask, fmask) in enumerate(zip(palette, masks, fill_masks)):
+    for i, (rgb, mask) in enumerate(zip(palette, masks)):
         color, kind, outline = looks[i]
         zone_index = len(zones)
         zones.append((tuple(rgb), regions[i]))
+        # La forme ne déborde (chevauchement) que SOUS les couleurs piquées ensuite, là où le débord est
+        # recouvert : jamais vers le tissu nu ni vers une couleur déjà piquée.
+        ov = max(1, round(settings.overlap_mm * px_per_mm))
+        grow = cv2.dilate(mask.astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * ov + 1, 2 * ov + 1))).astype(bool)
+        fmask = mask | (grow & later[i])
         want_outline = settings.outline if outline is None else outline
         fill_polys = polygons_of(fmask, px_per_mm, P.pull_mm, min_area) if kind != "none" else []
         shape_polys = polygons_of(mask, px_per_mm, 0.0, min_area) if (want_outline or kind == "none") else []
@@ -711,7 +822,10 @@ def build_industrial_pattern(path, settings):
         first, thread = False, color
         segments.append((len(pattern.stitches), zone_index))
 
-        sw.cover = Cover(cv2.dilate((fmask | later[i]).astype(np.uint8), tol).astype(bool), px_per_mm)
+        rk = 2 * max(1, round(P.rim_mm * px_per_mm)) + 1
+        rim = fmask & ~cv2.erode(fmask.astype(np.uint8), np.ones((rk, rk), np.uint8)).astype(bool)
+        hidden = cv2.dilate((later[i] | rim).astype(np.uint8), tol).astype(bool)
+        sw.cover = Cover(hidden, px_per_mm, own=cv2.dilate((fmask | later[i]).astype(np.uint8), tol).astype(bool))
         angle = _hatch_angle(kind, settings)
         remaining = list(jobs)
         if not same and sw.cur is not None:

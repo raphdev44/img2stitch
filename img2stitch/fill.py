@@ -165,6 +165,9 @@ def zone_fill(kind, mask, px_per_mm, s):
     if kind.startswith("relief_"):   # module dédié : bandes directionnelles, motif fill, vermicelle
         from .relief import zone_fill as relief_zone_fill
         return relief_zone_fill(kind, mask, px_per_mm, s)
+    if kind.startswith("inkstitch_"):   # remplissages portés d'Ink/Stitch (spirales, point de croix)
+        from .inkstitch import zone_fill as inkstitch_zone_fill
+        return inkstitch_zone_fill(kind, mask, px_per_mm, s)
     return [("runs", fill_runs(mask, px_per_mm, sp, ang, area))]
 
 
@@ -172,5 +175,7 @@ def zone_fill(kind, mask, px_per_mm, s):
 # Import tardif volontaire : relief.py ne depend de fill.py qu'a l'execution (fill_runs),
 # ce qui evite tout cycle d'import tout en exposant une palette unique a l'interface.
 from .relief import FILL_TYPES as _RELIEF_FILL_TYPES  # noqa: E402
+from .inkstitch import FILL_TYPES as _INKSTITCH_FILL_TYPES  # noqa: E402
 
 FILL_TYPES.update(_RELIEF_FILL_TYPES)
+FILL_TYPES.update(_INKSTITCH_FILL_TYPES)

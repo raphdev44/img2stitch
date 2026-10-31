@@ -1,0 +1,51 @@
+ * Serving Flask app 'webapp'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5097
+Press CTRL+C to quit
+127.0.0.1 - - [29/Oct/2026 20:43:03] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:43:05] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:44:37] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:44:37] "GET /static/css/app.css HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:44:37] "GET /static/js/app.js HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:44:37] "GET /static/img/logo.svg?v=1 HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:44:51] "POST /api/analyse HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:46:50] "POST /api/motifs HTTP/1.1" 202 -
+127.0.0.1 - - [29/Oct/2026 20:46:50] "GET /motifs/002ff35b8bd34232822b03cabecac757 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:46:50] "GET /static/css/app.css HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:46:50] "GET /motifs/002ff35b8bd34232822b03cabecac757/fichiers/source.png HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:46:50] "GET /static/js/app.js HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:46:50] "GET /static/img/logo.svg?v=1 HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:46:52] "GET /api/motifs/002ff35b8bd34232822b03cabecac757 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:46:54] "GET /api/motifs/002ff35b8bd34232822b03cabecac757 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:46:54] "GET /motifs/002ff35b8bd34232822b03cabecac757 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:46:54] "GET /static/css/app.css HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:46:54] "GET /static/js/app.js HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:46:54] "GET /static/img/logo.svg?v=1 HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:46:54] "GET /motifs/002ff35b8bd34232822b03cabecac757/fichiers/preview_raw.png?v=0 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:46:56] "GET /api/motifs/002ff35b8bd34232822b03cabecac757 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:46:58] "GET /api/motifs/002ff35b8bd34232822b03cabecac757 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:46:58] "GET /motifs/002ff35b8bd34232822b03cabecac757 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:46:58] "GET /static/css/app.css HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:46:58] "GET /static/js/app.js HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:46:58] "GET /motifs/002ff35b8bd34232822b03cabecac757/fichiers/preview_photo.png?v=0 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:46:58] "GET /static/img/logo.svg?v=1 HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:47:00] "GET /api/motifs/002ff35b8bd34232822b03cabecac757 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:47:00] "GET /motifs/002ff35b8bd34232822b03cabecac757 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:47:00] "GET /static/js/app.js HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:47:00] "GET /static/css/app.css HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:47:00] "GET /motifs/002ff35b8bd34232822b03cabecac757/fichiers/preview_photo.png?v=1 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:47:00] "GET /motifs/002ff35b8bd34232822b03cabecac757/fichiers/preview_raw.png?v=1 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:47:00] "GET /static/img/logo.svg?v=1 HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:47:35] "GET /api/motifs/002ff35b8bd34232822b03cabecac757 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:47:45] "GET /motifs/002ff35b8bd34232822b03cabecac757 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:47:45] "GET /static/css/app.css HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:47:45] "GET /static/js/app.js HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:47:45] "GET /static/img/logo.svg?v=1 HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 20:48:31] "GET /api/motifs/002ff35b8bd34232822b03cabecac757 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 20:49:18] "DELETE /api/motifs/4b19de8b2f0548e18de298065bc9cb6f HTTP/1.1" 405 -
+127.0.0.1 - - [29/Oct/2026 20:49:19] "DELETE /api/motifs/38ce4e17d2484c9db20eb1f36b02dce8 HTTP/1.1" 405 -
+127.0.0.1 - - [29/Oct/2026 20:49:19] "DELETE /api/motifs/002ff35b8bd34232822b03cabecac757 HTTP/1.1" 405 -
+127.0.0.1 - - [29/Oct/2026 20:49:39] "POST /api/motifs/4b19de8b2f0548e18de298065bc9cb6f/supprimer HTTP/1.1" 204 -
+127.0.0.1 - - [29/Oct/2026 20:49:39] "POST /api/motifs/38ce4e17d2484c9db20eb1f36b02dce8/supprimer HTTP/1.1" 204 -
+127.0.0.1 - - [29/Oct/2026 20:49:39] "POST /api/motifs/002ff35b8bd34232822b03cabecac757/supprimer HTTP/1.1" 204 -

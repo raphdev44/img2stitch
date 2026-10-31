@@ -156,20 +156,54 @@ forme :
 - petit galet rond : nœud français (moins de 3 mm²) ou roue enroulée ;
 - grande surface ronde : semis de points, jamais un satin en éventail.
 
-La bibliothèque compte vingt-trois points (`img2stitch/handstitch.py`) : point avant,
+La bibliothèque compte vingt-sept points (`img2stitch/handstitch.py`) : point avant,
 point arrière, point de tige, point fendu, chaînette, point posé, point de croix,
 reprisage, point passé (long-and-short), point d'arête, point de filet, chevron,
 fougère, plume, crétois, feston, graine, nœud français, point de poste, marguerite,
-roue enroulée, toile d'araignée et tulipe. Tous sont dessinés par leur géométrie réelle
+roue enroulée, toile d'araignée, tulipe, surjet, point en E, chaînette fléchée et
+résille. Les quatre derniers reprennent les motifs décoratifs de
+[stitch_generator](https://github.com/bastanja/stitch_generator) : le surjet et son
+point en E pour les bordures (rail, jambes, barre), la chaînette fléchée pour les
+tracés, et la résille — deux familles de diagonales croisées — pour les bandes
+larges. Tous sont dessinés par leur géométrie réelle
 (boucles arrondies de la chaînette, bras de la fougère, spirale de la roue), avec un
 léger hasard reproductible sur la longueur, l'angle et la position : c'est ce désordre
 réglé qui distingue le travail main du point machine.
 
-Le formulaire propose aussi de forcer une famille — tige, chaînette, feuilles, fleurs ou
-croix — pour uniformiser les tracés. En automatique, le classificateur décide forme par
-forme.
+Le formulaire propose aussi de forcer une famille — tige, chaînette, feuilles, fleurs,
+croix ou bandes décoratives — pour uniformiser les tracés. En automatique, le
+classificateur décide forme par forme ; la famille « bandes » choisit la résille pour une
+bande large, le point en E pour une bande moyenne et le surjet pour une bordure fine.
+
+Les quatre points repris de stitch_generator suivent ses motifs (surjet à boucle qui
+déborde du bord, point en E avec sa barre au bout de chaque jambe, flèches de la
+chaînette fléchée, résille en deux familles de diagonales croisées). La résille et le
+surjet remplissent une bande d'un bord à l'autre, comme l'original : leur largeur suit
+la forme mesurée, pas une valeur fixe.
 
 Une broderie à la main **n'est pas modifiable** : ni éditeur de zones, ni optimisation,
 ni fusion de fils. Les points ont été choisis pour la forme de départ ; il faut recréer
 un motif depuis l'image. Le motif est centré, limité à 110 mm sur son plus grand côté
 (au-delà, les points perdent l'échelle de la main) et exporté dans les huit formats.
+
+### Remplissages portés d'Ink/Stitch
+Dans l'éditeur de zones (« Modifier le motif »), la liste des remplissages est rangée en
+trois sections : **Normal**, **En relief** et **Ink/Stitch**. La troisième reprend trois
+techniques d'[Ink/Stitch](https://github.com/inkstitch/inkstitch/tree/main/lib), avec leur
+construction d'origine (`img2stitch/inkstitch.py`) :
+
+- **remplissage en contour** : des isocontours concentriques du bord vers le centre, reliés en
+  une seule spirale — deux anneaux voisins sont rééchantillonnés sur le même nombre de points
+  puis interpolés, si bien que le fil tourne au lieu de s'arrêter ;
+- **remplissage circulaire** : la même spirale, mais avec des cercles autour du centre, en
+  double spirale de Fermat (une spirale sur les anneaux pairs vers le centre, une seconde sur
+  les impairs qui revient), pour ne pas finir coincé au milieu ;
+- **point de croix** : une grille de croix de 2 mm, toutes piquées dans le même ordre
+  (diagonale, bord bas, diagonale) afin que le dessus du croisement ne change jamais ; deux
+  croix voisines partagent un coin, donc une rangée entière tient dans un seul tracé et le fil
+  repasse une seconde fois (deux brins).
+
+Ink/Stitch ordonne ses segments avec un graphe et des points de départ explicites ; ici c'est
+le planificateur du projet qui décide des déplacements et des coupes. Les cotes suivent les
+réglages du motif : l'écart de rangée règle l'espacement des anneaux, la longueur de point le
+pas du tracé.

@@ -424,6 +424,97 @@ def cross_stitch(pen, path, size=2.0, spacing=2.4):
         pen.put([a, b, c, d])
 
 
+def overlock(pen, path, half_width=1.2, length=1.8, loop_ratio=0.4):
+    """Point de surjet : un rail, et des boucles qui enjambent le bord.
+
+    Repris du motif « overlock_stitch » de stitch_generator : la boucle ne revient pas au même
+    point, elle déborde du bord (`loop_ratio` de la jambe) avant de retomber sur le rail. C'est ce
+    débord qui ourle le tissu, et ce qui distingue le surjet d'un simple point de feston.
+    """
+    pts = resample(path, 0.25)
+    total = _length(pts)
+    if total <= 1e-6:
+        return
+    half = half_width if callable(half_width) else (lambda _s: half_width)
+    pen.put(pts)
+    for s in np.arange(0.0, total, length):
+        base = _at(pts, min(s, total))
+        tangent = _tangent_at(pts, min(s, total))
+        normal = np.array([-tangent[1], tangent[0]])
+        h = max(0.3, float(half(s)))
+        tip = base + normal * h
+        pen.put([base - tangent * 0.35, tip - tangent * 0.5,
+                 tip + tangent * h * loop_ratio, base + tangent * 0.35])
+
+
+def e_stitch(pen, path, half_width=1.2, spacing=2.0, bar=0.55):
+    """Point en E : un rail, des jambes vers un bord et une petite barre à leur bout.
+
+    « e_stitch » de stitch_generator : la ligne du tracé, puis de petits traits qui pointent de
+    côté ; la barre ajoutée au bout de chaque jambe est ce qui fait lire un E.
+    """
+    pts = resample(path, 0.25)
+    total = _length(pts)
+    if total <= 1e-6:
+        return
+    half = half_width if callable(half_width) else (lambda _s: half_width)
+    pen.put(pts)
+    for s in np.arange(0.0, total, spacing):
+        base = _at(pts, min(s, total))
+        tangent = _tangent_at(pts, min(s, total))
+        normal = np.array([-tangent[1], tangent[0]])
+        tip = base + normal * max(0.3, float(half(s)))
+        pen.put([base, tip])
+        pen.put([tip - tangent * bar, tip + tangent * bar])
+
+
+def arrow_chain(pen, path, half_width=1.6, pitch=2.2, height=1.6):
+    """Chaînette fléchée : des flèches posées le long du tracé.
+
+    « arrow_chain » de stitch_generator, dont le motif est un V répété : la pointe est sur le
+    tracé, les deux bras partent vers l'arrière, si bien que la suite se lit dans le sens du
+    tracé. Le V est symétrique, le motif répété en miroir par l'original donne le même dessin.
+    """
+    pts = resample(path, 0.25)
+    total = _length(pts)
+    if total <= 1e-6:
+        return
+    half = half_width if callable(half_width) else (lambda _s: half_width)
+    for s in np.arange(0.0, total + 1e-6, pitch):
+        apex = _at(pts, min(s, total))
+        tangent = _tangent_at(pts, min(s, total))
+        normal = np.array([-tangent[1], tangent[0]])
+        h = max(0.5, float(half(s)))
+        pen.put([apex - tangent * height - normal * h, apex, apex - tangent * height + normal * h])
+
+
+def lattice(pen, path, half_width=1.2, span=2.6):
+    """Point de résille : deux familles de diagonales tendues d'un bord à l'autre.
+
+    Le treillis de stitch_generator est une seule ligne qui va et vient entre les deux bords. À
+    la main, la résille se brode en diagonales séparées, croisées deux fois : c'est leur
+    croisement qui dessine les losanges du filet, pas le va-et-vient.
+    """
+    pts = resample(path, 0.25)
+    total = _length(pts)
+    if total <= 1e-6:
+        return
+    half = half_width if callable(half_width) else (lambda _s: half_width)
+
+    def edge(s, side):
+        base = _at(pts, min(max(s, 0.0), total))
+        tangent = _tangent_at(pts, min(max(s, 0.0), total))
+        normal = np.array([-tangent[1], tangent[0]])
+        return base + normal * max(0.3, float(half(s))) * side
+
+    for flip in (1.0, -1.0):
+        s = 0.0
+        while s < total - 1e-6:
+            end = min(s + span, total)
+            pen.put([edge(s, flip), edge(end, -flip)])
+            s = end
+
+
 def darning(pen, mask, px_per_mm, spacing=1.3, length=3.2):
     """Point de reprisage : rangées de points avant, décalées comme des briques."""
     rows, cols = np.nonzero(mask)
@@ -573,6 +664,10 @@ STITCH_TYPES = {
     "feather": ("Point de plume", "V alternés de part et d'autre de l'axe.", "bande"),
     "cretan": ("Point crétois", "Bande à deux bords, traversée en alternance.", "bande"),
     "blanket": ("Point de feston", "Rail et jambes perpendiculaires.", "bande"),
+    "overlock": ("Point de surjet", "Rail et boucles qui enjambent le bord.", "bande"),
+    "e_stitch": ("Point en E", "Rail, jambes vers un bord et barre au bout.", "bande"),
+    "arrow_chain": ("Chaînette fléchée", "Des flèches posées le long du tracé.", "trait"),
+    "lattice": ("Point de résille", "Diagonales croisées d'un bord à l'autre : un filet.", "bande"),
     "seed": ("Point de graine", "Petits points dispersés, dans tous les sens.", "bande"),
     "french_knot": ("Nœud français", "Petite bosse ronde, faite d'un point enroulé.", "motif"),
     "bullion": ("Point de poste", "Barreau enroulé, en relief.", "motif"),

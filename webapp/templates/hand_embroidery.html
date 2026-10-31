@@ -6,7 +6,17 @@
 <div class="page-head">
   <div>
     <a href="{{ url_for('web.home') }}" class="back">Retour à l'accueil</a>
-    <h1>Broderie à la main</h1>
+    <div class="hand-title">
+      <h1>Broderie à la main</h1>
+      <button type="button" class="stitch-help-trigger" id="stitch-help-trigger"
+              aria-label="Voir les exemples des points de broderie" aria-haspopup="dialog"
+              aria-controls="stitch-help">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path d="M9.8 9a2.3 2.3 0 1 1 3.6 1.9c-.9.6-1.4 1-1.4 2.1M12 16.5h.01"></path>
+        </svg>
+      </button>
+    </div>
     <p class="muted">Le motif est brodé avec des points de main : point avant, tige, chaînette,
       arête de poisson, fougère, nœuds… Les surfaces ne sont remplies qu'à la marge, comme au fil et à l'aiguille.</p>
   </div>
@@ -104,4 +114,33 @@
     </div>
   </div>
 </form>
+
+<dialog class="stitch-help" id="stitch-help" aria-labelledby="stitch-help-title"
+        aria-describedby="stitch-help-description">
+  <div class="stitch-help-header">
+    <div>
+      <p class="stitch-help-eyebrow">Guide des points</p>
+      <h2 id="stitch-help-title">À chaque forme son point</h2>
+      <p id="stitch-help-description">Un aperçu du rendu des points de broderie utilisés par le générateur.
+        Le résultat varie selon la forme du motif.</p>
+    </div>
+    <button type="button" class="stitch-help-close" aria-label="Fermer le guide des points">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+    </button>
+  </div>
+  <div class="stitch-help-content">
+    {% for group, heading in [('trait', 'Traits'), ('bande', 'Bandes et bordures'), ('motif', 'Motifs et reliefs')] %}
+    <h3>{{ heading }}</h3>
+    <div class="stitch-samples">
+      {% for key, (label, description, family) in stitch_types.items() if family == group %}
+      <article class="stitch-sample">
+        <img src="{{ url_for('web.hand_stitch_sample', stitch=key) }}"
+             alt="{{ label }} sur toile" loading="lazy" decoding="async">
+        <div><strong>{{ label }}</strong><small>{{ description }}</small></div>
+      </article>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+</dialog>
 {% endblock %}

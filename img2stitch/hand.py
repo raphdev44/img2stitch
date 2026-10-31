@@ -44,6 +44,7 @@ STYLES = {
     "feuilles": "Feuilles au point d'arête",
     "fleurs": "Fleurs et nœuds pour les petites surfaces",
     "croix": "Point de croix pour les tracés",
+    "bandes": "Bandes décoratives (résille, E, surjet)",
 }
 
 
@@ -59,15 +60,19 @@ CREATIVITY = {
     5: "Très décoratif",
 }
 DECORATIVE = {
-    "chain": 2, "couching": 2,
-    "fern": 3, "woven_wheel": 3, "blanket": 3,
-    "chevron": 4, "fishbone": 4,
+    "chain": 2, "couching": 2, "overlock": 2,
+    "fern": 3, "woven_wheel": 3, "blanket": 3, "e_stitch": 3, "arrow_chain": 3,
+    "chevron": 4, "fishbone": 4, "lattice": 4,
     "feather": 5, "cretan": 5, "herringbone": 5, "spider_web": 5, "lazy_daisy": 5, "cross_stitch": 5,
 }
 # Le point classique qui raconte la même forme, quand le cran demandé refuse le point décoratif.
 PLAINER = {
     "chain": "split",
     "couching": "stem",
+    "overlock": "back",
+    "e_stitch": "blanket",
+    "arrow_chain": "chain",
+    "lattice": "herringbone",
     "fern": "satin",
     "woven_wheel": "french_knot",
     "blanket": "back",
@@ -116,6 +121,10 @@ def _classify(width_mm, length_mm, *, roundness=0.0, encloses=False, area_mm2=0.
         if roundness >= 0.6 and area_mm2 <= WOVEN_MAX_AREA:
             return "woven_wheel"
         return "lazy_daisy" if ratio >= 2.2 else "satin"
+    if style == "bandes":   # bande large : un filet ; bande étroite : son bord ourlé
+        if width >= 3.2:
+            return "lattice"
+        return "arrow_chain" if width >= 1.6 and ratio >= 8.0 and straight >= 0.9 else "e_stitch"
     # --- automatique : le cas le plus général d'abord, puis les formes étroites ---
     if 0 < area_mm2 <= 1.2 and ratio < 1.9:   # un vrai point rond, sans axe médian
         return "french_knot"
@@ -274,7 +283,8 @@ def _draw_one(pen, pts, half_fn, half, kind):
         hs.couching(pen, pts, half_width=max(0.6, half))
     elif kind == "cross_stitch":
         hs.cross_stitch(pen, pts, size=max(1.4, min(3.0, width)))
-    elif kind in ("satin", "fishbone", "herringbone", "chevron", "fern", "feather", "cretan", "blanket"):
+    elif kind in ("satin", "fishbone", "herringbone", "chevron", "fern", "feather", "cretan", "blanket",
+                  "overlock", "e_stitch", "arrow_chain", "lattice"):
         getattr(hs, kind)(pen, pts, half_fn)
     else:
         hs.back(pen, pts)
@@ -287,7 +297,7 @@ def _draw_path(pen, pts, half_fn, half, kind):
     l'original. Deux passages décalés de part et d'autre donnent l'épaisseur d'une aiguillée.
     """
     if kind in ("satin", "fishbone", "herringbone", "chevron", "fern", "feather",
-                "cretan", "blanket", "cross_stitch"):
+                "cretan", "blanket", "cross_stitch", "overlock", "e_stitch", "arrow_chain", "lattice"):
         _draw_one(pen, pts, half_fn, half, kind)
         return
     # Autant de brins qu'il faut pour remplir l'épaisseur mesurée du trait (un fil = 0,42 mm).
@@ -619,4 +629,49 @@ def hand_pattern(source, background="outside", *, n_colors=None, exclude=(), sty
     pattern.img2stitch_hand = {"stitches": tally, "shapes": shapes}
     pattern.img2stitch_frame = {"w": width_px, "h": height, "ppm": ppm,
                                 "cx": cx, "cy": cy, "scale": 1.0}
+    return pattern
+
+
+def hand_stitch_sample_pattern(kind):
+    """Construit un petit exemple avec les mêmes primitives de points que la broderie à la main."""
+    if kind not in hs.STITCH_TYPES:
+        raise ValueError("Type de point inconnu.")
+
+    pen = hs.Pen(seed=7)
+    path = np.array([(3, 5), (38, 5)], dtype=float)
+    half_width = 2.0
+    half_fn = lambda _s: half_width
+
+    if kind == "running":
+        hs.running(pen, path, length=2.6, gap=0.7, spread=0)
+    elif kind == "back":
+        hs.back(pen, path)
+    elif kind in ("stem", "split", "chain", "couching", "cross_stitch",
+                  "satin", "fishbone", "herringbone", "chevron", "fern", "feather",
+                  "cretan", "blanket", "overlock", "e_stitch", "arrow_chain", "lattice"):
+        _draw_one(pen, path, half_fn, half_width, kind)
+    elif kind == "darning":
+        hs.darning(pen, np.ones((15, 52), np.uint8), 1.5)
+    elif kind == "seed":
+        hs.seed(pen, np.ones((15, 52), np.uint8), 1.5, density=0.5)
+    elif kind == "french_knot":
+        hs.french_knot(pen, (20, 6), radius=2.2)
+    elif kind == "bullion":
+        hs.bullion(pen, (7, 6), (33, 6), radius=1.7)
+    elif kind == "lazy_daisy":
+        hs.lazy_daisy(pen, (7, 6), (33, 6), bulge=0.45)
+    elif kind == "woven_wheel":
+        hs.woven_wheel(pen, (20, 6), radius=5)
+    elif kind == "spider_web":
+        hs.spider_web(pen, (20, 6), radius=5)
+    elif kind == "tulip":
+        hs.tulip(pen, (20, 12), (20, 0), width=1.8)
+
+    pattern = pe.EmbPattern()
+    pattern.add_thread({"color": 0xB5233E})
+    for stroke in pen.strokes:
+        pattern.add_stitch_absolute(pe.JUMP, stroke[0][0] * 10, stroke[0][1] * 10)
+        for x, y in stroke:
+            pattern.add_stitch_absolute(pe.STITCH, x * 10, y * 10)
+    pattern.end()
     return pattern

@@ -1,0 +1,31 @@
+127.0.0.1 - - [29/Oct/2026 18:14:32] "GET /compare.html HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:14:38] "GET /compare.html HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:14:38] "GET /compare/50d894507a784a87939efbd0e0c75a7e_avant.png HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:14:38] "GET /compare/50d894507a784a87939efbd0e0c75a7e_apres.png HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:14:38] "GET /compare/50d894507a784a87939efbd0e0c75a7e_photo_avant.png HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:14:38] "GET /compare/50d894507a784a87939efbd0e0c75a7e_photo_apres.png HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:14:38] "GET /compare/exemple_avant.png HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:14:38] "GET /compare/exemple_photo_apres.png HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:14:38] "GET /compare/exemple_apres.png HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:14:38] "GET /compare/exemple_photo_avant.png HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:14:39] code 404, message File not found
+127.0.0.1 - - [29/Oct/2026 18:14:39] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [29/Oct/2026 19:12:53] code 404, message File not found
+127.0.0.1 - - [29/Oct/2026 19:12:53] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [29/Oct/2026 19:12:53] "GET /compare.html HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] code 404, message File not found
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /compare/50d894507a784a87939efbd0e0c75a7e_avant.png HTTP/1.1" 404 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] code 404, message File not found
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /compare/50d894507a784a87939efbd0e0c75a7e_apres.png HTTP/1.1" 404 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] code 404, message File not found
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /compare/50d894507a784a87939efbd0e0c75a7e_photo_apres.png HTTP/1.1" 404 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] code 404, message File not found
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /compare/50d894507a784a87939efbd0e0c75a7e_photo_avant.png HTTP/1.1" 404 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] code 404, message File not found
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /compare/exemple_avant.png HTTP/1.1" 404 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] code 404, message File not found
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /compare/exemple_apres.png HTTP/1.1" 404 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] code 404, message File not found
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /compare/exemple_photo_avant.png HTTP/1.1" 404 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] code 404, message File not found
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /compare/exemple_photo_apres.png HTTP/1.1" 404 -

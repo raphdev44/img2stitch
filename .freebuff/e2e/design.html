@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>anneau · img2stitch</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="/static/js/app.js" defer></script>
+</head>
+<body data-page="design">
+  <header class="topbar">
+    <a class="brand" href="/">
+      <img class="brand-logo" src="/static/img/logo.svg?v=1" alt="img2stitch" width="156" height="41">
+    </a>
+    <nav>
+      
+      <a href="/" class="">Créer</a>
+      <a href="/galerie" class="active">Galerie</a>
+    </nav>
+  </header>
+  <main class="container">
+    
+<div class="page-head">
+  <div>
+    <a href="/galerie" class="back">← Galerie</a>
+    <div class="title-edit" id="title-edit" data-url="/api/motifs/4b19de8b2f0548e18de298065bc9cb6f/nom">
+      <h1 id="design-title">anneau</h1>
+      <button type="button" class="icon-btn" id="title-edit-btn" title="Renommer le motif" aria-label="Renommer le motif">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg>
+      </button>
+      <form class="title-form" id="title-form" hidden>
+        <input type="text" id="title-input" maxlength="80" aria-label="Nom du motif" required>
+        <button type="submit" class="btn-primary inline">Enregistrer</button>
+        <button type="button" class="btn-ghost" id="title-cancel">Annuler</button>
+      </form>
+    </div>
+    <p class="form-error" id="title-error" role="alert" hidden></p>
+    <p class="muted">29/10/2026 · 20:40 · 4 couleurs demandées · fond extérieur supprimé · cadre 80 × 80 mm · numérisation par vectorisation</p>
+  </div>
+  <div class="head-actions">
+    
+    
+    <a class="btn-ghost" href="/motifs/4b19de8b2f0548e18de298065bc9cb6f/edition">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg>Modifier le motif
+    </a>
+    
+    <span class="badge ok">Prêt</span>
+    
+  </div>
+</div>
+
+
+
+
+
+
+
+
+<div class="design-layout" id="design" data-id="4b19de8b2f0548e18de298065bc9cb6f" data-status="ready"
+     data-has-raw="1" data-has-photo="1"
+     data-photo-rendering="0"
+     data-api="/api/motifs/4b19de8b2f0548e18de298065bc9cb6f"
+     data-optimize="/api/motifs/4b19de8b2f0548e18de298065bc9cb6f/optimiser">
+  <section class="card stage-card">
+    <div class="stage-toolbar">
+      <div class="segmented" role="tablist" aria-label="Type d'aperçu">
+        <button role="tab" data-view="photo" >Réaliste</button>
+        <button role="tab" data-view="raw" >Simple</button>
+        <button role="tab" data-view="source">Original</button>
+      </div>
+      
+      <div class="fabrics" id="fabrics" role="radiogroup" aria-label="Tissu de l'aperçu réaliste"
+           data-url="/api/motifs/4b19de8b2f0548e18de298065bc9cb6f/tissu">
+        <span>Tissu</span>
+        
+        <button type="button" role="radio" class="fabric" data-fabric="blanc" style="--c: #f1eee6"
+                title="Blanc" aria-label="Blanc" aria-checked="false"></button>
+        
+        <button type="button" role="radio" class="fabric" data-fabric="creme" style="--c: #e6dcc4"
+                title="Crème" aria-label="Crème" aria-checked="true"></button>
+        
+        <button type="button" role="radio" class="fabric" data-fabric="gris" style="--c: #8d8f92"
+                title="Gris" aria-label="Gris" aria-checked="false"></button>
+        
+        <button type="button" role="radio" class="fabric" data-fabric="noir" style="--c: #1c1c1e"
+                title="Noir" aria-label="Noir" aria-checked="false"></button>
+        
+        <button type="button" role="radio" class="fabric" data-fabric="marine" style="--c: #22304f"
+                title="Marine" aria-label="Marine" aria-checked="false"></button>
+        
+        <button type="button" role="radio" class="fabric" data-fabric="denim" style="--c: #46628a"
+                title="Denim" aria-label="Denim" aria-checked="false"></button>
+        
+        <button type="button" role="radio" class="fabric" data-fabric="rouge" style="--c: #8c2a2a"
+                title="Rouge" aria-label="Rouge" aria-checked="false"></button>
+        
+        <button type="button" role="radio" class="fabric" data-fabric="emeraude" style="--c: #075e47"
+                title="Vert émeraude" aria-label="Vert émeraude" aria-checked="false"></button>
+        
+      </div>
+      
+      <button type="button" class="btn-ghost stage-fit" id="stage-fit" title="Recentrer et ajuster l'aperçu"
+              aria-label="Recentrer et ajuster l'aperçu à la zone d'affichage">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg>
+        Ajuster
+      </button>
+    </div>
+    <div class="stage" id="design-stage">
+      
+      <img data-view="photo" src="/motifs/4b19de8b2f0548e18de298065bc9cb6f/fichiers/preview_photo.png?v=1" alt="Rendu réaliste de la broderie" draggable="false">
+      <img data-view="raw" src="/motifs/4b19de8b2f0548e18de298065bc9cb6f/fichiers/preview_raw.png?v=1" alt="Tracé des points" draggable="false">
+      <img data-view="source" src="/motifs/4b19de8b2f0548e18de298065bc9cb6f/fichiers/source.png" alt="Image d'origine" draggable="false">
+      <div class="stage-progress" id="photo-progress" hidden>
+        <span class="spinner big"></span>
+        <strong>Nouveau rendu réaliste…</strong>
+        <small>Le fil est posé sur le nouveau tissu, cela prend quelques secondes.</small>
+        <progress class="task-progress" id="photo-progress-bar" max="100" aria-label="Progression du rendu"></progress>
+      </div>
+      
+      <div class="stage-progress" id="optimize-progress" hidden>
+        <span class="spinner big"></span>
+        <strong id="optimize-step">Optimisation du motif…</strong>
+        <small>Duplication du motif, optimisation du parcours, puis régénération des fichiers et aperçus.</small>
+        <progress class="task-progress" id="optimize-progress-bar" max="100" aria-label="Progression de l'optimisation"></progress>
+      </div>
+    </div>
+  </section>
+
+  <aside class="side">
+    
+    <section class="card">
+      <h2>Caractéristiques</h2>
+      <dl class="stats">
+        <div><dt>Dimensions</dt><dd>79.7 × 79.7 mm</dd></div>
+        
+        <div><dt>Points</dt><dd>5 833</dd></div>
+        <div><dt>Changements de fil</dt><dd>1</dd></div>
+        <div><dt>Coupes</dt><dd>5</dd></div>
+      </dl>
+      
+      <div class="optimize-box">
+        <div class="optimize-picker" id="optimize-picker">
+          <button type="button" class="btn-primary" id="optimize-toggle" aria-haspopup="true"
+                  aria-expanded="false" aria-controls="optimize-menu">
+            Optimiser le motif
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="optimize-menu" id="optimize-menu" role="menu" aria-labelledby="optimize-toggle" hidden>
+            <button type="button" role="menuitem" class="optimize-option" id="optimize-btn" data-mode="simple">
+              <strong>Optimisation simple</strong>
+              <span>Nettoyage prudent des points (doublons, micro-points, points trop longs). L’ordre des couleurs et la densité sont conservés.</span>
+            </button>
+            <button type="button" role="menuitem" class="optimize-option" id="optimize-radical-btn" data-mode="radical">
+              <strong>Optimisation radicale</strong>
+              <span>Réorganise tout le parcours : blocs d’un même fil réunis, passages enchaînés au plus court, déplacements courts ou cachés piqués, points recouverts retirés. L’aspect est contrôlé, mais l’ordre des couleurs peut changer : vérifiez l’aperçu.</span>
+            </button>
+          </div>
+        </div>
+        <p class="hint optimize-copy">Crée une copie optimisée du motif (« nom - optimisé » ou « nom - optimisé+ ») : l’original reste inchangé dans la galerie.</p>
+        <p class="form-error" id="optimize-error" role="alert" hidden></p>
+        
+      </div>
+      
+      <h3>Fils</h3>
+      
+      <ol class="threads" id="threads" data-recolor="/api/motifs/4b19de8b2f0548e18de298065bc9cb6f/fil"
+          data-merge="/api/motifs/4b19de8b2f0548e18de298065bc9cb6f/fusion">
+        <li>
+          
+          <label class="swatch-pick" title="Changer la couleur de ce fil dans toute la broderie">
+            <span class="swatch" style="--c: #fffefe"></span>
+            <input type="color" value="#fffefe" data-from="#fffefe" aria-label="Changer la couleur du fil #fffefe">
+          </label>
+          
+          <code>#fffefe</code>
+          <span class="thread-len">2,2 m</span>
+        </li><li>
+          
+          <label class="swatch-pick" title="Changer la couleur de ce fil dans toute la broderie">
+            <span class="swatch" style="--c: #d22828"></span>
+            <input type="color" value="#d22828" data-from="#d22828" aria-label="Changer la couleur du fil #d22828">
+          </label>
+          
+          <code>#d22828</code>
+          <span class="thread-len">16,2 m</span>
+        </li>
+      </ol>
+      
+      <p class="thread-total"><span>Fil total estimé</span><strong>18,4 m</strong></p>
+      <p class="hint">Longueur par fil : points piqués + 30 % (boucles et tension), plus l'amorçage et la coupe.</p>
+      
+      <p class="hint">Cliquez sur une pastille pour changer la couleur de ce fil dans toute la broderie.</p>
+      
+      <p class="form-error" id="threads-error" role="alert" hidden></p>
+    </section>
+
+    <section class="card">
+      <h2>Télécharger</h2>
+      <div class="formats">
+        
+        <a class="format" href="/motifs/4b19de8b2f0548e18de298065bc9cb6f/telecharger/pes" download>
+          <strong>.pes</strong><small>Brother · Babylock</small>
+        </a>
+        
+        <a class="format" href="/motifs/4b19de8b2f0548e18de298065bc9cb6f/telecharger/dst" download>
+          <strong>.dst</strong><small>Tajima</small>
+        </a>
+        
+        <a class="format" href="/motifs/4b19de8b2f0548e18de298065bc9cb6f/telecharger/jef" download>
+          <strong>.jef</strong><small>Janome</small>
+        </a>
+        
+        <a class="format" href="/motifs/4b19de8b2f0548e18de298065bc9cb6f/telecharger/exp" download>
+          <strong>.exp</strong><small>Melco</small>
+        </a>
+        
+        <a class="format" href="/motifs/4b19de8b2f0548e18de298065bc9cb6f/telecharger/vp3" download>
+          <strong>.vp3</strong><small>Pfaff · Husqvarna</small>
+        </a>
+        
+        <a class="format" href="/motifs/4b19de8b2f0548e18de298065bc9cb6f/telecharger/xxx" download>
+          <strong>.xxx</strong><small>Singer</small>
+        </a>
+        
+        <a class="format" href="/motifs/4b19de8b2f0548e18de298065bc9cb6f/telecharger/u01" download>
+          <strong>.u01</strong><small>Barudan</small>
+        </a>
+        
+        <a class="format" href="/motifs/4b19de8b2f0548e18de298065bc9cb6f/telecharger/pec" download>
+          <strong>.pec</strong><small>Brother (PEC)</small>
+        </a>
+        
+      </div>
+    </section>
+    
+  </aside>
+</div>
+
+
+  </main>
+</body>
+</html>

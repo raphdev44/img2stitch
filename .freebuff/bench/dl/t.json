@@ -1,0 +1,497 @@
+{
+  "sha": "1138e043b811f891d2bf88fce5b2e414dac92391",
+  "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/trees/1138e043b811f891d2bf88fce5b2e414dac92391",
+  "tree": [
+    {
+      "path": ".github",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "715118b8f60b3505b55546252c9c755b822ae6ef",
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/trees/715118b8f60b3505b55546252c9c755b822ae6ef"
+    },
+    {
+      "path": ".github/FUNDING.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "649ce7179c42fb3b55cb46259bbb8347c9f58542",
+      "size": 614,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/649ce7179c42fb3b55cb46259bbb8347c9f58542"
+    },
+    {
+      "path": ".github/workflows",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "75b19ba5c2ece15dc9271c86968f2116d57b7fc7",
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/trees/75b19ba5c2ece15dc9271c86968f2116d57b7fc7"
+    },
+    {
+      "path": ".github/workflows/build.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "353cf285532e35f70f668d2794c0f469f9f381ae",
+      "size": 1127,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/353cf285532e35f70f668d2794c0f469f9f381ae"
+    },
+    {
+      "path": ".github/workflows/test.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1f8499d942b93e5ead9930dc055a1c9b9628a117",
+      "size": 1114,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/1f8499d942b93e5ead9930dc055a1c9b9628a117"
+    },
+    {
+      "path": ".gitignore",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b25c15b81fae06e1c55946ac6270bfdb293870e8",
+      "size": 3,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/b25c15b81fae06e1c55946ac6270bfdb293870e8"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e9883393f628f91a7b39e0a51e507336d59cbf79",
+      "size": 2843,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/e9883393f628f91a7b39e0a51e507336d59cbf79"
+    },
+    {
+      "path": "CODE_OF_CONDUCT.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0892053d1665049ad66425e71b3f7a63d6f91f80",
+      "size": 5227,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/0892053d1665049ad66425e71b3f7a63d6f91f80"
+    },
+    {
+      "path": "Doxyfile",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6040c7d8eb657556e49a260ef1f2078aaeb49a75",
+      "size": 126820,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/6040c7d8eb657556e49a260ef1f2078aaeb49a75"
+    },
+    {
+      "path": "LICENSE.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9e315546ee56c76be631b733904552b75492e9ec",
+      "size": 941,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/9e315546ee56c76be631b733904552b75492e9ec"
+    },
+    {
+      "path": "Makefile.unix",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e3ec2e1cfec168ec9e7f0472b5da0108bb6fe302",
+      "size": 1654,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/e3ec2e1cfec168ec9e7f0472b5da0108bb6fe302"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "07453b72b39fbdaadd925d188b2d7fb768f58826",
+      "size": 3001,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/07453b72b39fbdaadd925d188b2d7fb768f58826"
+    },
+    {
+      "path": "build.sh",
+      "mode": "100755",
+      "type": "blob",
+      "sha": "8d54997e52b080882fd5d8c9c123c6b1a39c63df",
+      "size": 57,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/8d54997e52b080882fd5d8c9c123c6b1a39c63df"
+    },
+    {
+      "path": "include",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "6faaed7bbb7db2fbf6a2d4a93ad92ec901563346",
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/trees/6faaed7bbb7db2fbf6a2d4a93ad92ec901563346"
+    },
+    {
+      "path": "include/embroidery.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0aaa840fdd0e9c7cabbac45a030cfb36cc523a33",
+      "size": 53784,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/0aaa840fdd0e9c7cabbac45a030cfb36cc523a33"
+    },
+    {
+      "path": "sew.1",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e6bf695cdab160287c6cd1f8536ce8b2a09f2a2c",
+      "size": 4488,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/e6bf695cdab160287c6cd1f8536ce8b2a09f2a2c"
+    },
+    {
+      "path": "src",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "22220ba8418475e38eda3f274ab2e56dbdc445e3",
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/trees/22220ba8418475e38eda3f274ab2e56dbdc445e3"
+    },
+    {
+      "path": "src/circle.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4dc0c039ee88f8eb6b66c6edc4ff5232ce47ac5b",
+      "size": 4791,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/4dc0c039ee88f8eb6b66c6edc4ff5232ce47ac5b"
+    },
+    {
+      "path": "src/compress.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a958cb34fba5ab7ac74f039ce4a2512ae29a8d1e",
+      "size": 9453,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/a958cb34fba5ab7ac74f039ce4a2512ae29a8d1e"
+    },
+    {
+      "path": "src/data.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b7c198fcd20196479a2be4c9c49ff503f3cca980",
+      "size": 13300,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/b7c198fcd20196479a2be4c9c49ff503f3cca980"
+    },
+    {
+      "path": "src/encoding.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b070b0974872a1a82ea471820f683b4117478117",
+      "size": 11879,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/b070b0974872a1a82ea471820f683b4117478117"
+    },
+    {
+      "path": "src/file.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "02d7e1f67b8a5988cf973aa2427506b04db52eed",
+      "size": 24815,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/02d7e1f67b8a5988cf973aa2427506b04db52eed"
+    },
+    {
+      "path": "src/formats",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "7ccde4ae1f7b80f1cca32a21e5c381ed7ecae0de",
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/trees/7ccde4ae1f7b80f1cca32a21e5c381ed7ecae0de"
+    },
+    {
+      "path": "src/formats/autodesk.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b9c776eed294e2163bea5a999c733e84b955979e",
+      "size": 14602,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/b9c776eed294e2163bea5a999c733e84b955979e"
+    },
+    {
+      "path": "src/formats/barudan.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b0b82b3cd0e86b7349a64e893e54ef9aef9d6a7a",
+      "size": 2348,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/b0b82b3cd0e86b7349a64e893e54ef9aef9d6a7a"
+    },
+    {
+      "path": "src/formats/bernina.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f8b5395df3bf773a8d3c5d1dec6c08a90cc03905",
+      "size": 1060,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/f8b5395df3bf773a8d3c5d1dec6c08a90cc03905"
+    },
+    {
+      "path": "src/formats/bitmap_cache.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "52d8abf8af11c82508498c995fd46e2f45d67920",
+      "size": 598,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/52d8abf8af11c82508498c995fd46e2f45d67920"
+    },
+    {
+      "path": "src/formats/bits_and_volts.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "42e0c1ff3681d990e6b3a057f82989ca509c41b3",
+      "size": 2291,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/42e0c1ff3681d990e6b3a057f82989ca509c41b3"
+    },
+    {
+      "path": "src/formats/brother.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "49c3e3f91a8c1fed2831f63f60052c328e269f45",
+      "size": 41186,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/49c3e3f91a8c1fed2831f63f60052c328e269f45"
+    },
+    {
+      "path": "src/formats/colors.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "72cb08e4b565c89a5cc5328ac38de4f0525bc049",
+      "size": 4616,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/72cb08e4b565c89a5cc5328ac38de4f0525bc049"
+    },
+    {
+      "path": "src/formats/csv.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fa67447bb74268ee39216c50a8f3c8f66fde6002",
+      "size": 12473,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/fa67447bb74268ee39216c50a8f3c8f66fde6002"
+    },
+    {
+      "path": "src/formats/eltac.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "fc843cc8e69b45912ad655a529bb14c254c2f2e0",
+      "size": 1255,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/fc843cc8e69b45912ad655a529bb14c254c2f2e0"
+    },
+    {
+      "path": "src/formats/gold_thread.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "101c8dbcf493ad482781551772bef81bff6e9bd9",
+      "size": 1444,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/101c8dbcf493ad482781551772bef81bff6e9bd9"
+    },
+    {
+      "path": "src/formats/great_notions.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7a4a8bb0f3d5d57e693ccb4d12dca7823b83a9c7",
+      "size": 509,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/7a4a8bb0f3d5d57e693ccb4d12dca7823b83a9c7"
+    },
+    {
+      "path": "src/formats/janome.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cec0d7480db4c3a2403b94587642b863365e59b0",
+      "size": 10926,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/cec0d7480db4c3a2403b94587642b863365e59b0"
+    },
+    {
+      "path": "src/formats/melco.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9e70726f79edcf11240ad08749e7ddc45c5abe4c",
+      "size": 4420,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/9e70726f79edcf11240ad08749e7ddc45c5abe4c"
+    },
+    {
+      "path": "src/formats/pfaff.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "56ca51220484bff4a163824d4cdbcb1d7502faaa",
+      "size": 5114,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/56ca51220484bff4a163824d4cdbcb1d7502faaa"
+    },
+    {
+      "path": "src/formats/sierra.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "43d627dfb3fe132b2222d8378debd8a17371afcc",
+      "size": 611,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/43d627dfb3fe132b2222d8378debd8a17371afcc"
+    },
+    {
+      "path": "src/formats/singer.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6509655a7778e27ed2dbc2430f80dc0ea54014a2",
+      "size": 8210,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/6509655a7778e27ed2dbc2430f80dc0ea54014a2"
+    },
+    {
+      "path": "src/formats/smoothie.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "e7b688976e31adb30efd2e2d547f098f4ca0d51f",
+      "size": 665,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/e7b688976e31adb30efd2e2d547f098f4ca0d51f"
+    },
+    {
+      "path": "src/formats/svg.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6b72b6fcd3430c1c4993237fa952d9898a88365b",
+      "size": 50929,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/6b72b6fcd3430c1c4993237fa952d9898a88365b"
+    },
+    {
+      "path": "src/formats/toyota.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "132c007ecad206d14c8777528207b75059cd88d8",
+      "size": 5125,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/132c007ecad206d14c8777528207b75059cd88d8"
+    },
+    {
+      "path": "src/formats/zsk_usa.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "1d658b448e6532cd0e585b10aa6730191aa88c04",
+      "size": 2560,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/1d658b448e6532cd0e585b10aa6730191aa88c04"
+    },
+    {
+      "path": "src/image.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "7b7ece5f87e23c01457d1ce001c2608625b395dc",
+      "size": 1017,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/7b7ece5f87e23c01457d1ce001c2608625b395dc"
+    },
+    {
+      "path": "src/pattern.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "9e1af75c94d8b0228d7a5cc9800e8934394553a0",
+      "size": 13400,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/9e1af75c94d8b0228d7a5cc9800e8934394553a0"
+    },
+    {
+      "path": "src/sew.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ec52ec169311aad714dfce4e739eb67d1cb8d020",
+      "size": 15137,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/ec52ec169311aad714dfce4e739eb67d1cb8d020"
+    },
+    {
+      "path": "src/string.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b68a5103f463dd55a0f1970d0575e1a5a6a0085a",
+      "size": 1541,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/b68a5103f463dd55a0f1970d0575e1a5a6a0085a"
+    },
+    {
+      "path": "src/test",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "c95c3220ede815824d1928fae04accb3353efa85",
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/trees/c95c3220ede815824d1928fae04accb3353efa85"
+    },
+    {
+      "path": "src/test/arc.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "642f6c4c492bf7fdb457082b33b33433a9a49a15",
+      "size": 2084,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/642f6c4c492bf7fdb457082b33b33433a9a49a15"
+    },
+    {
+      "path": "src/test/circle.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "a48455bbea0a0d9ad96f686b22ed4e9ad389fec4",
+      "size": 2058,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/a48455bbea0a0d9ad96f686b22ed4e9ad389fec4"
+    },
+    {
+      "path": "src/test/convert.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8df58134c33d0da8a6764c159d60c26d3de32106",
+      "size": 3340,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/8df58134c33d0da8a6764c159d60c26d3de32106"
+    },
+    {
+      "path": "src/test/ellipse.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6e5f9527fb2f1fe748ed68e09f979b193e5d2fab",
+      "size": 70,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/6e5f9527fb2f1fe748ed68e09f979b193e5d2fab"
+    },
+    {
+      "path": "src/test/fill.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f0e1cab7ece7d3880a05d7990ecc7c80b2458402",
+      "size": 342,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/f0e1cab7ece7d3880a05d7990ecc7c80b2458402"
+    },
+    {
+      "path": "src/test/format_table.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "57f86e924cac37e22fdae94457817862235aa651",
+      "size": 1644,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/57f86e924cac37e22fdae94457817862235aa651"
+    },
+    {
+      "path": "src/test/render.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ee8ab27005dc71dc80249028b64e0839fb41417b",
+      "size": 331,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/ee8ab27005dc71dc80249028b64e0839fb41417b"
+    },
+    {
+      "path": "src/test/test.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8bc4df5ed8cb967eea4e791ab03d7ab59e24a0c3",
+      "size": 4249,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/8bc4df5ed8cb967eea4e791ab03d7ab59e24a0c3"
+    },
+    {
+      "path": "src/test/test.h",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0166b23276866a2f591fc9371232fee7da1c96dc",
+      "size": 747,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/0166b23276866a2f591fc9371232fee7da1c96dc"
+    },
+    {
+      "path": "src/test/thread_color.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "089b5946d5e792ff702c4fb21722dd9875f833cf",
+      "size": 713,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/089b5946d5e792ff702c4fb21722dd9875f833cf"
+    },
+    {
+      "path": "src/test/vector.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "581b82319ad357a0d635ae32f74afc37f5e8edbb",
+      "size": 2676,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/581b82319ad357a0d635ae32f74afc37f5e8edbb"
+    },
+    {
+      "path": "src/thread_colors.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "04144e89c60072e4eaad8b593e7fc9df54dfe213",
+      "size": 30803,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/04144e89c60072e4eaad8b593e7fc9df54dfe213"
+    },
+    {
+      "path": "src/unsorted.c",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "624fc2544f90e79b588a6df650831e4f184b1cb8",
+      "size": 338044,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/624fc2544f90e79b588a6df650831e4f184b1cb8"
+    },
+    {
+      "path": "style.sh",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6d21109cf6978a0b7fc2bb484b5bbc50d3e7edae",
+      "size": 74,
+      "url": "https://api.github.com/repos/Embroidermodder/libembroidery/git/blobs/6d21109cf6978a0b7fc2bb484b5bbc50d3e7edae"
+    }
+  ],
+  "truncated": false
+}

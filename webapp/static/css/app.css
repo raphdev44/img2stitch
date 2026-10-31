@@ -169,7 +169,7 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; colo
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   max-width: 1280px;
-  margin: 0 auto;
+  margin-top:60px;
 }
 .home-tile {
   position: relative;
@@ -424,6 +424,63 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px va
 
 /* --- Page motif --- */
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+.hand-title { display: flex; align-items: center; gap: 10px; }
+.stitch-help-trigger, .stitch-help-close {
+  display: grid; flex: none; place-items: center; width: 44px; height: 44px;
+  padding: 0; border: 1px solid var(--border); border-radius: 50%;
+  background: var(--surface); color: var(--muted); cursor: pointer;
+  transition: color .18s, background .18s, border-color .18s;
+}
+.stitch-help-trigger:hover, .stitch-help-close:hover {
+  color: var(--accent); background: var(--accent-soft); border-color: var(--accent);
+}
+.stitch-help-trigger:focus-visible, .stitch-help-close:focus-visible {
+  outline: 3px solid var(--accent); outline-offset: 3px;
+}
+.stitch-help-trigger svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.stitch-help {
+  width: min(900px, calc(100vw - 32px)); max-width: none; max-height: min(86dvh, 900px);
+  margin: auto; padding: 0; overflow: hidden; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+  box-shadow: 0 24px 80px #00000040;
+}
+.stitch-help::backdrop { background: #17141180; backdrop-filter: blur(3px); }
+.stitch-help-header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+  padding: 24px 26px 18px; border-bottom: 1px solid var(--border);
+}
+.stitch-help-header h2 { margin: 0; font-size: 1.35rem; }
+.stitch-help-header p { max-width: 620px; margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.stitch-help-header .stitch-help-eyebrow {
+  margin: 0 0 5px; color: var(--accent); font-size: 11px; font-weight: 750;
+  letter-spacing: .1em; text-transform: uppercase;
+}
+.stitch-help-close { width: 44px; height: 44px; }
+.stitch-help-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.stitch-help-content { max-height: calc(min(86dvh, 900px) - 115px); overflow: auto; padding: 4px 26px 26px; }
+.stitch-help-content h3 { margin: 20px 0 10px; color: var(--accent); font-size: 12px; }
+.stitch-samples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.stitch-sample {
+  min-width: 0; padding: 10px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface);
+}
+.stitch-sample > img {
+  display: block; width: 100%; height: 74px; margin-bottom: 6px; object-fit: cover;
+  border-radius: 7px;
+  background-color: #f7eee7;
+  background-image: repeating-linear-gradient(0deg, #b8887920 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(90deg, #b8887918 0 1px, transparent 1px 5px);
+}
+.stitch-sample > div { display: grid; gap: 2px; }
+.stitch-sample strong { font-size: 13px; }
+.stitch-sample small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+@media (max-width: 560px) {
+  .stitch-help { width: calc(100vw - 20px); max-height: 90dvh; border-radius: 16px; }
+  .stitch-help-header { padding: 18px 16px 14px; gap: 12px; }
+  .stitch-help-header h2 { font-size: 1.15rem; }
+  .stitch-help-content { max-height: calc(90dvh - 100px); padding: 0 16px 20px; }
+  .stitch-samples { grid-template-columns: 1fr; gap: 8px; }
+}
 .back { color: var(--muted); font-size: 14px; display: inline-block; margin-bottom: 8px; }
 .back:hover { color: var(--accent); }
 

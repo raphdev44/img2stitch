@@ -1,0 +1,22 @@
+04312bd2/source.png            std  5201 pts 22 coupes   1.3s | vec  6327 pts 30 coupes  2.5s | aspect  0.0%/ 0.1% | couv 13.4%->16.6% | fils [2, 2]
+50d89450/source.png            std 17022 pts 168 coupes   4.6s | vec 18493 pts 142 coupes  9.1s | aspect  0.1%/ 1.3% | couv 23.6%->27.2% | fils [3, 3]
+545d7d0f/source.png            std 15439 pts 144 coupes   2.8s | vec 17939 pts 153 coupes  9.9s | aspect  0.2%/ 2.0% | couv 18.6%->22.1% | fils [4, 4]
+6ee3df93/source.png            std  9155 pts 113 coupes   2.5s | vec 11117 pts 130 coupes  6.6s | aspect  0.5%/ 1.0% | couv 15.9%->19.5% | fils [3, 4]
+91792f43/source.png            std  6529 pts 82 coupes   1.5s | vec  7916 pts 103 coupes  5.5s | aspect  0.0%/ 0.5% | couv  9.3%->12.7% | fils [1, 1]
+989806b3/source.png            std  4969 pts 19 coupes   1.4s | vec  5911 pts 28 coupes  1.8s | aspect  0.0%/ 0.0% | couv 17.2%->19.9% | fils [2, 2]
+b33af327/source.png            std 26883 pts 193 coupes   6.3s | vec 29813 pts 204 coupes 15.7s | aspect  1.0%/ 2.9% | couv 39.4%->42.8% | fils [4, 4]
+b9ea88ea/source.png            std  9155 pts 113 coupes   1.9s | vec 11117 pts 130 coupes  6.3s | aspect  0.5%/ 1.0% | couv 15.9%->19.5% | fils [3, 4]
+c3357f3b/source.png            std 12176 pts 80 coupes   1.9s | vec 14367 pts 108 coupes  6.8s | aspect  0.8%/ 2.3% | couv 34.4%->38.9% | fils [4, 4]
+c9252f4d/source.png            std 12846 pts 59 coupes   1.8s | vec 13458 pts 57 coupes  6.6s | aspect  1.0%/ 1.3% | couv 18.5%->19.5% | fils [2, 2]
+examples/exemple.png           std  4613 pts 12 coupes   0.9s | vec  5174 pts 13 coupes  2.8s | aspect  0.2%/ 0.2% | couv 19.7%->21.1% | fils [3, 3]
+corpus_i/anneau.png            std  5397 pts  3 coupes   2.3s | vec  5833 pts  5 coupes  1.9s | aspect  0.0%/ 0.1% | couv 20.3%->20.9% | fils [2, 2]
+corpus_i/bandes.png            std  4639 pts  6 coupes   1.5s | vec  5436 pts  7 coupes  5.1s | aspect  0.0%/ 0.0% | couv 11.1%->12.6% | fils [1, 1]
+corpus_i/degrade.png           std  7516 pts  0 coupes   1.2s | vec  8311 pts  2 coupes  2.2s | aspect  0.0%/ 0.0% | couv 32.9%->34.4% | fils [4, 4]
+corpus_i/flou.png              std  9006 pts  2 coupes   3.5s | vec 10149 pts 11 coupes  3.4s | aspect  0.4%/ 1.0% | couv 25.5%->27.1% | fils [4, 4]
+corpus_i/texte.png             std 10710 pts 101 coupes  42.1s | vec 12244 pts 118 coupes 80.8s | aspect  0.5%/ 0.7% | couv  3.5%-> 3.9% | fils [4, 4]
+corpus_i/triangle.png          std  4406 pts  4 coupes   1.1s | vec  4961 pts 10 coupes  2.2s | aspect  1.2%/ 1.2% | couv 14.3%->15.2% | fils [3, 3]
+
+17 images, 0 échecs
+points : standard 165662, vector 188566 (+13.8%)
+temps  : standard 78.6s, vector 169.3s
+aspect : max 2.9%

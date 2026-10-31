@@ -1,0 +1,130 @@
+{
+ "id": "ab75a787cc9d40198ad8088ee09cffdd",
+ "name": "exemple",
+ "created_at": "2026-10-29T17:06:17+00:00",
+ "mode": "classic",
+ "source_format": "PNG",
+ "n_colors": 3,
+ "background": "outside",
+ "target_mm": [
+  60,
+  60
+ ],
+ "excluded": [],
+ "thicken_lines": false,
+ "smart_fill": false,
+ "fabric": "creme",
+ "status": "ready",
+ "step": null,
+ "progress": 100,
+ "error": null,
+ "stats": {
+  "stitches": 1911,
+  "jumps": 4,
+  "trims": 4,
+  "color_changes": 2
+ },
+ "threads": [
+  "#afc136",
+  "#1e3cc8",
+  "#dc1f1f"
+ ],
+ "thread_lengths": [
+  2.37,
+  1.53,
+  3.95
+ ],
+ "zones": [
+  {
+   "source": "#afc136",
+   "color": "#afc136",
+   "fill": "tatami",
+   "outline": true,
+   "region": null
+  },
+  {
+   "source": "#1e3cc8",
+   "color": "#1e3cc8",
+   "fill": "tatami",
+   "outline": true,
+   "region": null
+  },
+  {
+   "source": "#dc1f1f",
+   "color": "#dc1f1f",
+   "fill": "tatami",
+   "outline": true,
+   "region": null
+  }
+ ],
+ "regions": [],
+ "frame": {
+  "w": 676.0,
+  "h": 541.0,
+  "ppm": 10.0,
+  "cx": 337.9469157790452,
+  "cy": 264.7479976933216,
+  "scale": 1.0
+ },
+ "zones_previous": null,
+ "regions_previous": null,
+ "size_mm": [
+  59.8,
+  44.8
+ ],
+ "optimization_report": {
+  "mode": "radical",
+  "level": "radical",
+  "removed_duplicates": 0,
+  "removed_micro_stitches": 0,
+  "simplified_points": 533,
+  "removed_hidden_stitches": 22,
+  "merged_trims": 0,
+  "hidden_travels_merged": 8,
+  "split_long_stitches": 2,
+  "reordered": false,
+  "color_changes_saved": 0,
+  "appearance_change_pct": 0.05,
+  "coverage_iou": 0.9996,
+  "warnings": [],
+  "before": {
+   "stitches": 2425,
+   "trims": 12,
+   "jumps": 15,
+   "color_changes": 2,
+   "travel_mm": 0.0,
+   "runs": 0,
+   "blocks": 3,
+   "est_time_min": 6.0,
+   "stats": {
+    "stitches": 2425,
+    "jumps": 12,
+    "trims": 12,
+    "color_changes": 2
+   }
+  },
+  "blocks_before": 3,
+  "blocks_after": 3,
+  "after": {
+   "stitches": 1911,
+   "trims": 4,
+   "jumps": 7,
+   "color_changes": 2,
+   "travel_mm": 180.0,
+   "runs": 15,
+   "blocks": 3,
+   "est_time_min": 4.5,
+   "colors": 3,
+   "stats": {
+    "stitches": 1911,
+    "jumps": 4,
+    "trims": 4,
+    "color_changes": 2
+   }
+  }
+ },
+ "editing": false,
+ "photo_version": 3,
+ "optimization_mode": "radical",
+ "edit_error": null
+}

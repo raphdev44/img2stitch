@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Créer un motif · img2stitch</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="/static/js/app.js" defer></script>
+</head>
+<body data-page="create">
+  <header class="topbar">
+    <a class="brand" href="/">
+      <img class="brand-logo" src="/static/img/logo.svg?v=1" alt="img2stitch" width="156" height="41">
+    </a>
+    <nav>
+      
+      <a href="/" class="active">Créer</a>
+      <a href="/galerie" class="">Galerie</a>
+    </nav>
+  </header>
+  <main class="container">
+    
+<section class="hero">
+  <h1>Transformez une image en <em>broderie machine</em></h1>
+  <p>Déposez un logo ou un dessin, choisissez le nombre de fils : le motif est prêt pour votre brodeuse.</p>
+</section>
+
+<form id="create-form" class="card create-card" action="/api/motifs" data-analyse="/api/analyse" novalidate>
+  <label class="dropzone" id="dropzone">
+    <input type="file" name="image" id="image-input" accept="image/png,image/jpeg,image/webp,image/avif,.avif" hidden>
+    <div class="dz-empty">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      <strong>Glissez votre image ici</strong>
+      <span>ou collez une image copiée (Ctrl+V), ou cliquez pour parcourir</span>
+      <span>PNG, JPG, WebP ou AVIF · 20 Mo max</span>
+    </div>
+    <div class="dz-preview" hidden>
+      <img id="image-preview" alt="Aperçu de l'image">
+      <span class="dz-name" id="image-name"></span>
+      <button type="button" class="btn-ghost small" id="image-clear">Changer d'image</button>
+    </div>
+  </label>
+
+  <div class="options">
+    <div class="field" id="colors-field">
+  <div class="field-head">
+    <label for="colors">Nombre de couleurs</label>
+    <output id="colors-value" class="pill">4</output>
+    <span class="pill pill-busy" aria-hidden="true"><span class="spinner"></span></span>
+  </div>
+  <input type="range" id="colors" name="colors" min="1" max="12" value="4" step="1">
+  <div class="range-scale"><span>1</span><span>12</span></div>
+  <div class="palette" id="palette" aria-label="Couleurs retenues" hidden></div>
+  <div class="palette palette-removed" id="palette-removed" hidden></div>
+  <div class="swatch-menu" id="swatch-menu" role="menu" hidden>
+    <button type="button" role="menuitem">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"/></svg>
+      Supprimer cette couleur
+    </button>
+  </div>
+  <p class="hint" id="colors-hint">Chaque couleur correspond à un fil. Le fond n'est pas compté.</p>
+</div>
+
+    <fieldset class="field size" id="size-field">
+      <legend>Taille maximale du motif <span class="spinner field-spinner" aria-hidden="true"></span></legend>
+      <div class="size-inputs">
+        <label><span>Largeur</span>
+          <span class="unit"><input type="number" name="width_mm" id="width-mm" min="10" max="400" step="0.1" value="100" required><em>mm</em></span>
+        </label>
+        <span class="times" aria-hidden="true">×</span>
+        <label><span>Hauteur</span>
+          <span class="unit"><input type="number" name="height_mm" id="height-mm" min="10" max="400" step="0.1" value="100" required><em>mm</em></span>
+        </label>
+      </div>
+      <p class="hint">Proposée automatiquement : taille optimale calculée par le moteur pour cette image, modifiable. Le motif brodé sera le plus grand possible tout en tenant entièrement dans ce rectangle.</p>
+    </fieldset>
+
+    <fieldset class="field choices">
+      <legend>Arrière-plan</legend>
+      <label class="choice">
+        <input type="radio" name="background" value="outside" checked>
+        <span><strong>Supprimer le fond autour du motif</strong>
+          <small>Les zones de la même couleur à l'intérieur du motif sont conservées et brodées.</small></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="background" value="all">
+        <span><strong>Supprimer le fond et toutes les zones de sa couleur</strong>
+          <small>Les zones intérieures de la couleur du fond restent vides (tissu apparent).</small></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="background" value="keep">
+        <span><strong>Conserver le fond</strong>
+          <small>Toute l'image est brodée, fond compris.</small></span>
+      </label>
+    </fieldset>
+
+    <details class="advanced-options">
+      <summary>Options avancées</summary>
+      <label class="select-field">
+        <span>Algorithme de numérisation</span>
+        <select id="scan-engine" name="engine">
+          
+          <option value="standard" selected
+                  >Standard</option>
+          
+          <option value="vector"
+                  >Par vectorisation (vpype)</option>
+          
+        </select>
+        <small class="hint">
+          Standard : contours suivis au pixel, remplissage rangée par rangée.
+          Par vectorisation : contours lissés et compensés (tension du fil), sous-couche de stabilisation
+          et remplissage vectoriel — plus régulier sur les formes courbes, un peu plus de points
+          .
+        </small>
+      </label>
+      <label class="choice">
+        <input type="checkbox" id="thicken-lines">
+        <span><strong>Épaissir les lignes trop fines</strong>
+          <small>Renforce les traits fins pour éviter qu'ils disparaissent dans la broderie.</small></span>
+      </label>
+      <label class="choice">
+        <input type="checkbox" id="smart-fill">
+        <span><strong>Remplissage intelligent</strong>
+          <small>Détecte les bandes fines (lettrages, rubans, tiges) et les brode en satin tournant, sans point de contour.</small></span>
+      </label>
+    </details>
+
+    <p class="form-error" id="form-error" role="alert" hidden></p>
+
+    <button type="submit" class="btn-primary" id="submit-btn" disabled>
+      <span class="btn-label">Générer le motif</span>
+      <span class="spinner" aria-hidden="true"></span>
+    </button>
+    <div class="inline-progress" id="create-progress" role="status" aria-live="polite" hidden>
+      <span>Génération du motif en cours…</span>
+      <progress class="task-progress" aria-label="Génération du motif en cours"></progress>
+    </div>
+  </div>
+</form>
+
+  </main>
+</body>
+</html>

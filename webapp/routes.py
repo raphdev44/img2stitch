@@ -1,10 +1,15 @@
 from datetime import datetime
+from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, send_file, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from img2stitch.algorithm_vectorize import available as geometry_available
+from img2stitch.hand import hand_stitch_sample_pattern
 from img2stitch.handstitch import STITCH_TYPES
+from img2stitch.photo import render_photo_preview
 
 from .designs import (BACKGROUND_MODES, CROSS_STITCH_MAX_COLORS, DEFAULT_SIZE_MM, FABRICS, FILL_TYPES, FORMATS, MAX_COLORS, MAX_SIZE_MM,
                       MIN_COLORS, MIN_SIZE_MM, SCAN_ENGINES, ZONES, InvalidImage, analyse_cross_stitch_image, analyse_image,
@@ -78,7 +83,19 @@ def create_cross_stitch():
 def create_hand():
     return render_template("hand_embroidery.html", min_colors=MIN_COLORS, max_colors=MAX_COLORS,
                            min_size=MIN_SIZE_MM, max_size=MAX_SIZE_MM, default_size=DEFAULT_SIZE_MM,
-                           styles=HAND_STYLES, creativity=HAND_CREATIVITY)
+                           styles=HAND_STYLES, creativity=HAND_CREATIVITY, stitch_types=STITCH_TYPES)
+
+
+@bp.get("/api/broderie-main/exemples/<stitch>.png")
+def hand_stitch_sample(stitch):
+    if stitch not in STITCH_TYPES:
+        abort(404)
+    pattern = hand_stitch_sample_pattern(stitch)
+    with TemporaryDirectory() as temp_dir:
+        image_path = Path(temp_dir) / "stitch-sample.png"
+        render_photo_preview(pattern, str(image_path), fabric="creme")
+        image = image_path.read_bytes()
+    return send_file(BytesIO(image), mimetype="image/png", max_age=86400)
 
 
 @bp.post("/api/broderie-main")

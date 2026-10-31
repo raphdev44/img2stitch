@@ -1,0 +1,24 @@
+ * Serving Flask app 'webapp'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5093
+Press CTRL+C to quit
+127.0.0.1 - - [29/Oct/2026 19:11:57] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:12:06] "POST /api/motifs HTTP/1.1" 202 -
+Aperçu réaliste ignoré pour 39c77b59a13b4b4da515e657834966d6 : espace disque insuffisant
+127.0.0.1 - - [29/Oct/2026 19:12:13] "GET /motifs/39c77b59a13b4b4da515e657834966d6 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:12:14] "GET /static/js/app.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:12:14] "GET /static/css/app.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:12:14] "GET /motifs/39c77b59a13b4b4da515e657834966d6/fichiers/source.png HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:12:14] "GET /motifs/39c77b59a13b4b4da515e657834966d6/fichiers/preview_raw.png?v=1 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:12:14] "GET /static/img/logo.svg?v=1 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:12:15] "GET /static/img/favicon.svg HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /motifs/39c77b59a13b4b4da515e657834966d6 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /static/css/app.css HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /static/js/app.js HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /static/img/logo.svg?v=1 HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 19:12:55] "GET /static/img/favicon.svg HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 19:13:47] "GET /motifs/39c77b59a13b4b4da515e657834966d6 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:13:47] "GET /static/css/app.css HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 19:13:47] "GET /static/js/app.js HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 19:13:47] "GET /static/img/logo.svg?v=1 HTTP/1.1" 304 -

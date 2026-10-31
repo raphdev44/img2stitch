@@ -1,0 +1,56 @@
+ * Serving Flask app 'webapp'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5077
+Press CTRL+C to quit
+127.0.0.1 - - [29/Oct/2026 18:28:10] "GET /galerie HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:28:10] "GET /galerie HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:28:19] "GET /motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:28:19] "GET /motifs/b33af327fbe14c9b84d988e6936ec5e7/fichiers/preview_photo.png?v=10 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:28:19] "GET /static/js/app.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:28:19] "GET /static/css/app.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:28:19] "GET /motifs/b33af327fbe14c9b84d988e6936ec5e7/fichiers/preview_raw.png?v=10 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:28:19] "GET /static/img/logo.svg?v=1 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:28:19] "GET /motifs/b33af327fbe14c9b84d988e6936ec5e7/fichiers/source.png HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:28:21] "GET /static/img/favicon.svg HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:28:51] "POST /api/motifs/b33af327fbe14c9b84d988e6936ec5e7/optimiser HTTP/1.1" 202 -
+127.0.0.1 - - [29/Oct/2026 18:28:52] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:28:53] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+1127.0.0.1 - - [29/Oct/2026 19:12:53] "GET /static/img/favicon.svg HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 19:12:53] "GET /motifs/ab75a787cc9d40198ad8088ee09cffdd HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /static/css/app.css HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /motifs/ab75a787cc9d40198ad8088ee09cffdd/fichiers/preview_photo.png?v=3 HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /motifs/ab75a787cc9d40198ad8088ee09cffdd/fichiers/preview_raw.png?v=3 HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /static/js/app.js HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /static/img/logo.svg?v=1 HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /motifs/ab75a787cc9d40198ad8088ee09cffdd/fichiers/source.png HTTP/1.1" 304 -
+e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:04] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:05] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:06] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:08] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:09] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:10] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:11] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:12] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:14] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:15] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:16] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:17] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:19] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:20] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:21] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:22] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:23] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:25] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:26] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:27] "GET /api/motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:27] "GET /motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:27] "GET /static/js/app.js HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 18:29:27] "GET /static/css/app.css HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 18:29:27] "GET /motifs/b33af327fbe14c9b84d988e6936ec5e7/fichiers/preview_photo.png?v=11 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 18:29:27] "GET /static/img/logo.svg?v=1 HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 18:29:27] "GET /motifs/b33af327fbe14c9b84d988e6936ec5e7/fichiers/preview_raw.png?v=11 HTTP/1.1" 200 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /motifs/b33af327fbe14c9b84d988e6936ec5e7 HTTP/1.1" 404 -
+127.0.0.1 - - [29/Oct/2026 19:12:54] "GET /static/img/favicon.svg HTTP/1.1" 304 -
+127.0.0.1 - - [29/Oct/2026 19:12:56] "GET /favicon.ico HTTP/1.1" 404 -
