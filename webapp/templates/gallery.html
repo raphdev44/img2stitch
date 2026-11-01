@@ -29,20 +29,18 @@
   {% elif d.has_raw %}{% set img = 'preview_raw.png' %}
   {% else %}{% set img = 'source.png' %}{% endif %}
   <div class="tile-card">
-    <a class="tile" href="{{ url_for('web.design', design_id=d.id) }}>
+    <a class="tile" href="{{ url_for('web.design', design_id=d.id) }}">
+      <span class="tile-kind">
+        {% if d.mode == 'streamline' %}<span class="scan-badge streamline" title="Streamlines / bleu">Streamlines</span>
+        {% elif d.mode == 'cross_stitch' %}<span class="scan-badge pixel" title="Pixel / saumon">Pixel art · Point de croix</span>
+        {% elif d.mode == 'hand' %}<span class="scan-badge hand" title="Main / jaune">Broderie à la main</span>
+        {% else %}<span class="scan-badge classic" title="Classique / violet">Classique</span>{% endif %}
+      </span>
       <div class="tile-img {{ 'pending' if img == 'source.png' or img == 'preview_raw.png' }}" style="position: relative;">
         <img loading="lazy" src="{{ url_for('web.design_file', design_id=d.id, name=img, v=d.photo_version) }}" alt="{{ d.name }}">
         {% if d.status == 'processing' %}<span class="badge busy">En cours</span>
         {% elif d.status == 'error' %}<span class="badge err">Erreur</span>{% endif %}
-        {% if d.mode == 'streamline' %}
-        <span class="scan-badge streamline" title="Streamlines / bleu">Streamlines</span>
-        <span class="streamline-icon" title="Numérisation streamline"></span>
-        {% elif d.mode == 'cross_stitch' %}
-        <span class="scan-badge pixel" title="Pixel / saumon">Pixel art · Point de croix</span>
-        {% elif d.mode == 'hand' %}
-        <span class="scan-badge hand" title="Main / jaune">Broderie à la main</span>
-        {% elif d.mode == 'classic' %}
-        <span class="scan-badge classic" title="Classique / violet">Classique</span>{% endif %}
+        {% if d.mode == 'streamline' %}<span class="streamline-icon" title="Numérisation streamline"></span>{% endif %}
       </div>
       <div class="tile-body">
         <strong>{{ d.name }}</strong>

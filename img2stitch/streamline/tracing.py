@@ -33,7 +33,9 @@ def _bilinear(field, pts):
 
 
 def _inside(inside_grid, pts):
-    return _bilinear(inside_grid.astype(np.float32), pts) > 0.5
+    pts = np.asarray(pts)
+    in_grid = (pts[:, 0] >= 0.0) & (pts[:, 0] <= 1.0) & (pts[:, 1] >= 0.0) & (pts[:, 1] <= 1.0)
+    return in_grid & (_bilinear(inside_grid.astype(np.float32), pts) > 0.5)
 
 
 def field_vectors(density, direction):
@@ -67,7 +69,7 @@ def _sample_signal(signal, inside, relative_line_width, rng):
     return np.vstack(blocks) if blocks else np.empty((0, 2))
 
 
-def _boundary_sources(boundary, z, inside, relative_line_width, rng):
+def _boundary_sources(boundary, z, inside, relative_line_width, rng=None):
     """Sources posées sur le bord, là où le flux entre (leur `sample_sources_on_closed_boundary`)."""
     closed = np.vstack((boundary, boundary[:1]))
     seg = np.diff(closed, axis=0)
@@ -76,37 +78,38 @@ def _boundary_sources(boundary, z, inside, relative_line_width, rng):
     total = float(arc[-1])
     if total <= 1e-9:
         return np.empty((0, 2))
-    step = max(total / 4000.0, 0.002)
-    ts = np.arange(0.0, total, step)
+    step = max(total / 4000.0, 0.0005)
+    ts = (np.arange(int(total / step)) + 0.5) * step
+    if not len(ts):
+        return np.empty((0, 2))
     pts = np.column_stack((np.interp(ts, arc, closed[:, 0]), np.interp(ts, arc, closed[:, 1])))
     tangents = np.column_stack((np.gradient(closed[:, 0]), np.gradient(closed[:, 1])))
-    tangents = np.column_stack((np.interp(ts, arc, tangents[:, 0]),
-                                np.interp(ts, arc, tangents[:, 1])))
+    tangents = np.column_stack((np.interp(ts, arc, tangents[:, 0]), np.interp(ts, arc, tangents[:, 1])))
     tn = np.hypot(tangents[:, 0], tangents[:, 1])
     tangents /= np.where(tn < 1e-9, 1.0, tn)[:, None]
-    normals = np.column_stack((tangents[:, 1], -tangents[:, 0]))   # rotate90 de leur code
-    # On garde la normale qui rentre dans la forme : le sens du contour suffit à le dire.
-    probe = pts + normals * (2.0 * step)
-    flip = ~_inside(inside, probe)
-    normals[flip] *= -1.0
+    normals = np.column_stack((tangents[:, 1], -tangents[:, 0]))
+    probe = pts + normals * (1.5 / (GRID - 1))
+    normals[~_inside(inside, probe)] *= -1.0
     inflow = np.einsum("ij,ij->i", normals, _bilinear(z, pts))
-    weight = np.maximum(inflow, 0.0) * step / max(relative_line_width, 1e-6)
-    count = np.floor(weight).astype(np.intp) + (rng.random(len(weight)) < (weight % 1.0))
-    taken = np.flatnonzero(count)
-    if not len(taken):
+    density = np.maximum(inflow, 0.0) * step / max(relative_line_width, 1e-6)
+    cumulative = np.cumsum(density)
+    count = int(np.floor(cumulative[-1] + 1e-9))
+    if count < 1:
         return np.empty((0, 2))
-    blocks = [pts[i] + normals[i] * 0.002 for i in taken for _ in range(int(count[i]))]
-    return np.asarray(blocks, float).reshape(-1, 2) if blocks else np.empty((0, 2))
+    at = np.searchsorted(cumulative, np.arange(count) + 0.5).clip(0, len(ts) - 1)
+    return pts[at] + normals[at] * 0.002
 
 
 def sources_and_sinks(density, direction, inside, boundary, holes, relative_line_width, seed=7):
     """Sources (bord + intérieur) et puits (intérieur) du champ, comme dans leur pipeline."""
+    if isinstance(boundary, np.ndarray) and boundary.ndim == 2:
+        boundary = [boundary]
     rng = np.random.default_rng(seed)
     z = field_vectors(density, direction)
     div = divergence(density, direction)
     positive = _sample_signal(div, inside, relative_line_width, rng)
     negative = _sample_signal(-div, inside, relative_line_width, rng)
-    edges = [_boundary_sources(boundary, z, inside, relative_line_width, rng)]
+    edges = [_boundary_sources(np.asarray(b, float), z, inside, relative_line_width, rng) for b in boundary]
     edges += [_boundary_sources(np.asarray(h, float), z, inside, relative_line_width, rng) for h in holes]
     edges = [e for e in edges if len(e)]
     sources = np.vstack([positive] + edges) if edges else positive
@@ -169,23 +172,51 @@ def crop_inside(lines, inside):
     return kept
 
 
-def cut_at_sinks(lines, sinks, candidates=8):
-    """Coupe chaque ligne au puits le plus proche (leur appartement biparti, en glouton).
-
-    Seuls les `candidates` puits les plus proches du centre de la ligne sont comparés point par
-    point : la matrice complète (points x puits) serait très coûteuse et ne changerait pas la coupe.
-    """
-    if not len(sinks):
-        return lines
-    out = []
-    for line in lines:
-        centre = line.mean(axis=0)
-        near = np.argsort(((sinks - centre) ** 2).sum(axis=1))[:candidates]
-        distance = ((line[:, None, :] - sinks[near][None, :, :]) ** 2).sum(axis=2)
-        point_index, _ = np.unravel_index(int(np.argmin(distance)), distance.shape)
-        if point_index <= 1:          # le puits tombe sur le début : la ligne entière disparaît
+def _assign_sinks(distance):
+    """Appariement biunivoque ligne <-> puits de coût minimal (exact avec scipy, glouton sinon)."""
+    n_lines, n_sinks = distance.shape
+    try:
+        from scipy.optimize import linear_sum_assignment
+        rows, cols = linear_sum_assignment(distance)
+        return {int(r): int(c) for r, c in zip(rows, cols)}
+    except ImportError:
+        pass
+    order = np.argsort(distance, axis=None, kind="stable")
+    line_taken = np.zeros(n_lines, bool)
+    sink_taken = np.zeros(n_sinks, bool)
+    matches, wanted = {}, min(n_lines, n_sinks)
+    for flat in order:
+        i, j = divmod(int(flat), n_sinks)
+        if line_taken[i] or sink_taken[j]:
             continue
-        out.append(line[:point_index + 1])
+        line_taken[i] = sink_taken[j] = True
+        matches[i] = j
+        if len(matches) == wanted:
+            break
+    return matches
+
+
+def cut_at_sinks(lines, sinks):
+    """UN puits = UNE ligne coupée ; toutes les autres restent entières."""
+    if not len(sinks) or not len(lines):
+        return list(lines)
+    sinks = np.asarray(sinks, float)
+    distance = np.empty((len(lines), len(sinks)))
+    nearest_point = np.empty((len(lines), len(sinks)), np.intp)
+    for k, line in enumerate(lines):
+        d = ((line[:, None, :] - sinks[None, :, :]) ** 2).sum(axis=2)
+        nearest_point[k] = d.argmin(axis=0)
+        distance[k] = np.sqrt(d.min(axis=0))
+    matches = _assign_sinks(distance)
+    out = []
+    for k, line in enumerate(lines):
+        if k not in matches:
+            out.append(line)
+            continue
+        index = int(nearest_point[k, matches[k]])
+        if index <= 1:
+            continue
+        out.append(line if index >= len(line) - 1 else line[:index + 1])
     return out
 
 

@@ -267,8 +267,34 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; colo
 .home-tile.tone-violet { --tone: var(--violet); --tone-soft: #ece8ff; }
 .home-tile.tone-coral { --tone: var(--accent); --tone-soft: var(--accent-soft); }
 .home-tile.tone-amber { --tone: var(--amber); --tone-soft: #fbeed2; }
+.home-tile.tone-blue { --tone: #3f86c9; --tone-soft: #e7f1fb; }
 .home-tile .home-icon { background: var(--tone-soft); color: var(--tone); }
 .home-tile .home-go { color: var(--tone); }
+
+/* La galerie est un accès, pas un canal de création : surface verte, liseré haut et pastille
+   pleine, pour qu'elle se distingue des quatre tuiles de numérisation. */
+.home-tile.is-gallery {
+  background-color: color-mix(in srgb, var(--brand-green) 7%, var(--surface));
+  background-image: radial-gradient(120% 130% at 100% 0%,
+    color-mix(in srgb, var(--brand-green) 14%, transparent), transparent 58%);
+  border-color: color-mix(in srgb, var(--brand-green) 34%, var(--border));
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--brand-green) 13%, transparent);
+}
+.home-tile.is-gallery::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 auto;
+  height: 4px;
+  background: var(--brand-green);
+}
+.home-tile.is-gallery:hover {
+  border-color: var(--brand-green);
+  box-shadow: 0 14px 32px color-mix(in srgb, var(--brand-green) 20%, transparent);
+}
+.home-tile.is-gallery .home-icon { background: var(--brand-green); color: #fff; }
+.home-tile.is-gallery strong { color: color-mix(in srgb, var(--brand-green) 62%, var(--text)); }
+.home-tile.is-gallery .home-go { color: var(--brand-green); }
 .home-thread {
   position: fixed;
   z-index: -1;
@@ -610,6 +636,16 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px va
 .tile-delete button { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--err); box-shadow: var(--shadow); cursor: pointer; transition: background .2s, transform .15s; }
 .tile-delete button:hover:not(:disabled), .tile-delete button:focus-visible { background: color-mix(in srgb, var(--err) 10%, var(--surface)); transform: scale(1.06); outline: 2px solid color-mix(in srgb, var(--err) 40%, transparent); }
 .tile-delete button:disabled { color: var(--muted); cursor: not-allowed; opacity: .7; }
+
+/* Type de motif : une bande au-dessus de l'aperçu, pour qu'il reste toujours lisible. */
+.tile-kind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 31px;
+  padding: 7px 52px 7px 10px;
+  background: var(--surface);
+}
 .tile-delete svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .tile-body { display: grid; gap: 2px; padding: 14px 16px 16px; }
 .tile-body strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

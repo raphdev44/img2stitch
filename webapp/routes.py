@@ -153,7 +153,8 @@ def api_create_streamline():
     image = request.files.get("image")
     if image is None or not image.filename:
         return jsonify(error="Aucune image envoyée."), 400
-    background = request.form.get("background", "outside")
+    # Les streamlines privilégient une interprétation de la photo entière : fond conservé par défaut.
+    background = request.form.get("background", "keep")
     if background not in BACKGROUND_MODES:
         return jsonify(error="Option d'arrière-plan invalide."), 400
     try:

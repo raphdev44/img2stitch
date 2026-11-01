@@ -521,8 +521,22 @@ class DesignStore:
                                        creativity=meta.get("hand_creativity") or 3,
                                        target_mm=meta.get("target_mm") or None)
             else:
-                pattern = _streamline_pattern(d, meta) if streamline else image_to_pattern(
-                    str(d / SOURCE), s)
+                if streamline:
+                    # La génération streamlines dure plusieurs dizaines de secondes : on suit
+                    # chaque passe et chaque itération de relaxation, sans marteler le disque.
+                    last = {"value": None, "time": 0.0}
+
+                    def streamline_progress(step, total, message, last=last):
+                        value = 5 + round(28 * step / max(total, 1))
+                        now = time.monotonic()
+                        if value == last["value"] and now - last["time"] < 0.4:
+                            return
+                        last.update(value=value, time=now)
+                        self._update(d, meta, progress=value, step=message)
+
+                    pattern = _streamline_pattern(d, meta, progress_callback=streamline_progress)
+                else:
+                    pattern = image_to_pattern(str(d / SOURCE), s)
             self._update(d, meta, step="Préparation des points", progress=35)
             stats = pattern_stats(pattern)
             if stats["stitches"] == 0:
@@ -799,10 +813,10 @@ def _streamline_meta(options):
     o = options or {}
     return {"line_width_mm": round(min(2.0, max(0.15, float(o.get("line_width_mm", 0.4)))), 2),
             "background_fill": bool(o.get("background_fill", True)),
-            "relax_iterations": int(min(40, max(4, int(o.get("relax_iterations", 14)))))}
+            "relax_iterations": int(min(40, max(4, int(o.get("relax_iterations", 7)))))}
 
 
-def _streamline_pattern(d, meta):
+def _streamline_pattern(d, meta, progress_callback=None):
     """Photo -> motif par lignes de courant (`img2stitch.streamline`)."""
     bg, scope = BACKGROUND_MODES[meta["background"]]
     o = meta.get("streamline") or {}
@@ -814,7 +828,8 @@ def _streamline_pattern(d, meta):
             target_mm=tuple(meta["target_mm"]) if meta.get("target_mm") else None,
             line_width_mm=o.get("line_width_mm", 0.4),
             background_fill=o.get("background_fill", True),
-            relax_iterations=o.get("relax_iterations", 14))
+            relax_iterations=o.get("relax_iterations", 7),
+            progress_callback=progress_callback)
     except ValueError as exc:
         raise InvalidImage(str(exc)) from exc
 

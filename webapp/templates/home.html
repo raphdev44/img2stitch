@@ -11,7 +11,7 @@
 </section>
 
 <div class="home-tiles">
-  <a class="home-tile is-link tone-green" href="{{ url_for('web.gallery') }}">
+  <a class="home-tile is-link tone-green is-gallery" href="{{ url_for('web.gallery') }}">
     <span class="home-tile-content">
       <span class="home-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 9h16M9 9v10M15 9v10"/></svg>
@@ -68,12 +68,14 @@
   <a class="home-tile tone-blue" href="{{ url_for('web.create_streamline') }}">
     <span class="home-tile-content">
       <span class="home-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M3 7c4 0 4 10 8 10s4-10 8-10M3 17c4 0 4-10 8-10s4 10 8 10"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M3 7c3.5-3.5 7.5-3.5 9 0s5.5 3.5 9 0M3 12c3.5-3.5 7.5-3.5 9 0s5.5 3.5 9 0M3 17c3.5-3.5 7.5-3.5 9 0s5.5 3.5 9 0"/></svg>
       </span>
       <strong>Streamlines</strong>
-      <span class="home-copy">Les lignes de courant suivent le dessin de la photo : un remplissage lisse et régulier, sans rangées parallèles.</span>
-      <span class="home-go">Digitaliser une photo <span aria-hidden="true">→</span></span>
+      <span class="home-copy">Une interprétation artistique : les lignes de courant suivent la photo sans viser une reproduction exacte.</span>
+      <span class="home-go">Créer une interprétation <span aria-hidden="true">→</span></span>
     </span>
+    <img class="home-illustration" src="{{ url_for('static', filename='img/icone_streamline.png') }}"
+         alt="" width="270" height="259">
   </a>
 </div>
 
