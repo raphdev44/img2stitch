@@ -7,7 +7,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from img2stitch.cross_stitch import (_grid_lines, _limit_cell_colors, _prepare_cells, cross_stitch_palettes,
-                                    cross_stitch_pattern, read_cells)
+                                    cross_stitch_pattern, pixelate_for_cross_stitch, read_cells)
 from webapp import create_app
 
 
@@ -297,6 +297,18 @@ def test_oversized_and_non_pixel_art_images_are_rejected():
     assert len(pattern.img2stitch_source_palette) <= 20
     assert len(pattern.threadlist) <= 20
     assert pattern.img2stitch_grid["crosses"] == 300
+
+
+def test_a_photo_is_pixelated_into_an_accepted_cross_stitch_grid():
+    rng = np.random.default_rng(0)
+    photo = Image.fromarray(rng.integers(0, 256, (613, 421, 3), dtype=np.uint8))
+    with pytest.raises(ValueError):
+        read_cells(_source(photo))
+    pixelated = pixelate_for_cross_stitch(photo)
+    assert max(pixelated.size) <= 150
+    pattern = cross_stitch_pattern(_source(pixelated), "keep")
+    assert len(pattern.threadlist) <= 20
+    assert pattern.img2stitch_grid["crosses"] > 0
 
 
 def test_color_reduction_merges_nearest_shades_first():

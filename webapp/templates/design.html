@@ -26,6 +26,10 @@
     <a class="btn-ghost" href="{{ url_for('web.edit', design_id=d.id) }}">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg>Modifier le motif
     </a>
+    {% elif d.mode == 'hand' and d.status == 'ready' and hand_strokes %}
+    <a class="btn-ghost" href="{{ url_for('web.hand_edit', design_id=d.id) }}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/></svg>Modifier les tracés
+    </a>
     {% endif %}
     <span class="badge ok">Prêt</span>
     {% elif d.status == 'error' %}<span class="badge err">Erreur</span>
@@ -182,7 +186,7 @@
       </div>
       {% endif %}
       <h3>Fils</h3>
-      {% set editable = d.status == 'ready' and d.mode not in ('hand', 'streamline') %}
+      {% set editable = d.status == 'ready' %}
       <ol class="threads" id="threads" data-recolor="{{ url_for('web.api_recolor', design_id=d.id) }}"
           data-merge="{{ url_for('web.api_merge', design_id=d.id) }}">
         {% for c in d.threads %}<li>
@@ -213,7 +217,6 @@
       {% endif %}
       <p class="form-error" id="threads-error" role="alert" hidden></p>
     </section>
-
     <section class="card">
       <h2>Télécharger</h2>
       <div class="formats">

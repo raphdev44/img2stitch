@@ -48,16 +48,35 @@ STYLES = {
 }
 
 
-# Jauge de créativité : 1 = les points les plus sobres et les plus solides, 5 = le plus décoratif.
-# Le classificateur propose toujours le point le plus juste pour la forme ; ce rang dit à partir de
-# quel cran on accepte qu'il s'écarte d'un tracé classique. Un point trop décoratif est remplacé par
-# son équivalent sobre : la fidélité au dessin ne dépend jamais du curseur, seulement l'audace.
+# Jauge de créativité : 1 = sobre / sobre, 5 = très décoratif.
+# Cette carte contrôle quelle famille de points l'algorithme peut piocher,
+# du sobre (1) au expressif/décoratif (5). Le point classique de départ est le point avant.
 CREATIVITY = {
     1: "Sobre",
     2: "Discret",
     3: "Équilibré",
     4: "Expressif",
     5: "Très décoratif",
+}
+
+# Mapping créativité -> familles de points autorisées, dans l'ordre croissant.
+# À chaque cran on ajoute une nouvelle famille ; on ne retire jamais ce qui a été autorisé auparavant.
+# Niveau 1-2 : sobre, seulement les points de base
+# Niveau 3 : ajout des points de structure (tige, fendu)
+# Niveau 4 : accès presque complet aux points décoratifs et de remplissage
+# Niveau 5 : tout le palette + légère aléatoire dans le placement
+CREATIVITY_STITCH_MAP = {
+    1: {"allowed_kinds": ["running", "french_knot"]},
+    2: {"allowed_kinds": ["running", "split", "french_knot"]},
+    3: {"allowed_kinds": ["running", "stem", "split", "french_knot"]},
+    4: {"allowed_kinds": ["running", "stem", "split", "chain", "french_knot", "seed", "laid", "tatami",
+                          "satin", "fishbone", "herringbone", "chevron", "fern", "feather", "cretan",
+                          "blanket", "overlock", "e_stitch", "arrow_chain", "lattice", "couching",
+                          "cross_stitch", "woven_wheel", "spider_web", "lazy_daisy", "bullion", "tulip"]},
+    5: {"allowed_kinds": ["running", "stem", "split", "chain", "french_knot", "seed", "laid", "tatami", "back",
+                          "satin", "fishbone", "herringbone", "chevron", "fern", "feather", "cretan",
+                          "blanket", "overlock", "e_stitch", "arrow_chain", "lattice", "couching",
+                          "cross_stitch", "woven_wheel", "spider_web", "lazy_daisy", "bullion", "tulip"]},
 }
 DECORATIVE = {
     "chain": 2, "couching": 2, "overlock": 2,
@@ -70,6 +89,7 @@ PLAINER = {
     "chain": "split",
     "couching": "stem",
     "overlock": "back",
+    "back": "split",
     "e_stitch": "blanket",
     "arrow_chain": "chain",
     "lattice": "herringbone",
@@ -88,13 +108,30 @@ PLAINER = {
 
 
 def _temper(kind, level):
-    """Ramène un point au cran de créativité demandé (1 sobre … 5 décoratif)."""
+    """Ramène un point au cran de créativité demandé (1 sobre … 5 décoratif).
+
+    Utilise la carte CREATIVITY_STITCH_MAP : si le point n'est pas dans la liste autorisée
+    pour le cran de créativité, on retombe vers le point sobre de base (running),
+    sauf pour french_knot qui reste autorisé à tous les crans.
+    """
     level = max(1, min(5, int(level if level is not None else 3)))
-    seen = set()
-    while DECORATIVE.get(kind, 1) > level and kind in PLAINER and kind not in seen:
-        seen.add(kind)
-        kind = PLAINER[kind]
-    return kind
+    allowed = CREATIVITY_STITCH_MAP[level]["allowed_kinds"]
+    if kind in allowed:
+        return kind
+    # Le point décoratif refusé cède la place à son point classique, s'il est permis à ce cran
+    plain = PLAINER.get(kind)
+    if plain in allowed:
+        return plain
+    # Sinon, retombe sur le point sobre de base selon la forme
+    if kind == "french_knot":
+        return "french_knot"
+    # Un remplissage de grande surface devient un point couché quand le cran le permet
+    if kind == "darning" and "tatami" in allowed:
+        return "tatami"
+    if kind == "darning" and "laid" in allowed:
+        return "laid"
+    # Par défaut, point avant sobre
+    return "running"
 
 
 def _classify(width_mm, length_mm, *, roundness=0.0, encloses=False, area_mm2=0.0, style="auto",
@@ -132,6 +169,8 @@ def _classify(width_mm, length_mm, *, roundness=0.0, encloses=False, area_mm2=0.
         return "woven_wheel"
     if roundness >= 0.72 and ratio < 2.0 and area_mm2 > WOVEN_MAX_AREA:
         return "seed"      # grande surface ronde et courte : un semis, pas un satin en éventail
+    if filled is True and ratio < 2.0 and area_mm2 > WOVEN_MAX_AREA:
+        return "tatami"    # grande surface pleine et ramassée : petits points irréguliers en rangs
     # --- la forme avant la largeur : feuille, bordure, bande ---
     if filled is not False and taper >= 0.35 and 1.4 <= width <= 7.5 and ratio >= 2.0 and length_mm >= 5.0:
         return "fern" if width <= 3.2 else "fishbone"   # feuille : nervure et bras, ou arête
@@ -286,8 +325,13 @@ def _draw_one(pen, pts, half_fn, half, kind):
     elif kind in ("satin", "fishbone", "herringbone", "chevron", "fern", "feather", "cretan", "blanket",
                   "overlock", "e_stitch", "arrow_chain", "lattice"):
         getattr(hs, kind)(pen, pts, half_fn)
+    elif kind == "running":
+        hs.running(pen, pts)
     else:
         hs.back(pen, pts)
+
+
+MULTI_STRAND_KIND = "running"   # deux brins parallèles : un point sobre, sauf cran supérieur (voir _draw_path)
 
 
 def _draw_path(pen, pts, half_fn, half, kind):
@@ -309,7 +353,7 @@ def _draw_path(pen, pts, half_fn, half, kind):
         shift = 0.0 if strands == 1 else -span + 2 * span * i / (strands - 1)
         # Plusieurs brins se posent en lignes droites : trois torsades côte à côte font une corde.
         _draw_one(pen, pts + hs.normals(pts) * shift, half_fn, half,
-                  kind if strands == 1 else "back")
+                  kind if strands == 1 else MULTI_STRAND_KIND)
 
 
 def _draw(pen, info, ppm, kind):
@@ -328,6 +372,10 @@ def _draw_area(pen, comp, info, ppm, kind):
     """Grande surface : semis ou reprisage, jamais la densité d'un tatami machine."""
     if kind == "seed":
         hs.seed(pen, comp, ppm, density=0.9, length=1.6)
+    elif kind == "laid":
+        hs.laid(pen, comp, ppm, spacing=1.2, length=3.0)
+    elif kind == "tatami":
+        hs.tatami(pen, comp, ppm)
     else:
         hs.darning(pen, comp, ppm, spacing=1.4, length=3.4)
     for outline in info["outlines"]:   # le tracé de la main suit le bord, pas l'axe médian
@@ -437,7 +485,9 @@ def _assign_families(units, style, creativity):
             continue
         # Un trait de même largeur ne raconte pas la même chose s'il cerne une forme (arrière,
         # ligne nette) ou s'il court en ligne ouverte (tige, torsade).
-        unit["kind"] = _temper("back" if unit.get("outline") else "stem", creativity)
+        # Au cran 5, le contour prend l'arrière (ligne nette) ; plus bas, un point fendu.
+        outline_kind = "back" if creativity >= 5 else "split"
+        unit["kind"] = _temper(outline_kind if unit.get("outline") else "stem", creativity)
     groups = []
     for unit in units:
         if unit["width"] < 1.45 * weight:
@@ -499,12 +549,13 @@ def _component_units(comp, ppm, style, seed, creativity=3):
     width = 2 * info["half"] if info["half"] > 0.05 else info["length"]
     kind = choose_stitch(width, info["length"], roundness=info["roundness"], encloses=info["encloses"],
                          area_mm2=info["area"], style=style, creativity=creativity)
-    if kind in ("seed", "darning"):
+    if kind in ("seed", "darning", "laid", "tatami"):
         _draw_area(pen, comp, info, ppm, kind)
     elif not info["paths"] and kind not in ("french_knot", "woven_wheel", "spider_web", "lazy_daisy"):
         if info["length"] >= 1.6 * max(2 * info["half"], 0.2):
             _draw_short_stroke(pen, comp, ppm)      # petite marque allongée : un point, pas une pastille
-            kind = "back"
+            # Apply creativity tempering: at low creativity, back becomes running
+            kind = _temper(kind, creativity)
         else:
             hs.french_knot(pen, info["center"], max(0.6, min(1.4, info["half"])))
             kind = "french_knot"
@@ -513,16 +564,30 @@ def _component_units(comp, ppm, style, seed, creativity=3):
     return [], pen.strokes, kind
 
 
-def _draw_units(pen, units, ppm):
-    """Dessine les traits d'une forme avec les familles décidées à l'échelle du motif."""
+def _draw_units(pen, units, ppm, overrides=None):
+    """Dessine les traits d'une forme avec les familles décidées à l'échelle du motif.
+
+    `overrides` remplace le point d'un tracé précis (clé = identifiant du tracé) : c'est le choix
+    fait à la main dans l'éditeur, qui ne doit pas être tempéré.
+    """
     for unit in units:
-        _draw_path(pen, unit["path"].astype(float) / ppm, unit["half_fn"], unit["half"], unit["kind"])
-    return Counter(unit["kind"] for unit in units).most_common(1)[0][0]
+        kind = (overrides or {}).get(unit["id"], unit["kind"])
+        pts = unit["path"].astype(float) / ppm
+        if kind == "french_knot":
+            # Un nœud ne se pose pas sur une ligne : il se fait au centre du tracé, comme un motif rond.
+            center = pts[len(pts) // 2]
+            hs.french_knot(pen, (float(center[0]), float(center[1])), max(0.5, min(1.4, unit["half"])))
+        else:
+            _draw_path(pen, pts, unit["half_fn"], unit["half"], kind)
+    return Counter((overrides or {}).get(unit["id"], unit["kind"]) for unit in units).most_common(1)[0][0]
 
 
 def hand_pattern(source, background="outside", *, n_colors=None, exclude=(), style="auto", seed=0,
-                 creativity=3, target_mm=None):
+                 creativity=3, target_mm=None, color_overrides=None, stroke_overrides=None):
     """Image -> motif « broderie à la main » (EmbPattern pyembroidery).
+
+    `stroke_overrides` : {identifiant de tracé: point} choisi à la main ; les identifiants sont
+    listés dans `pattern.img2stitch_hand["strokes"]`.
 
     `target_mm` est le rectangle (largeur, hauteur) que la broderie ne doit pas dépasser : le motif
     est mis à l'échelle pour y tenir au plus juste, en gardant ses proportions. Sans lui, le motif
@@ -540,7 +605,7 @@ def hand_pattern(source, background="outside", *, n_colors=None, exclude=(), sty
     if not masks:
         pattern.end()
         pattern.img2stitch_zones, pattern.img2stitch_segments = [], []
-        pattern.img2stitch_hand = {"stitches": {}, "shapes": 0}
+        pattern.img2stitch_hand = {"stitches": {}, "shapes": 0, "strokes": []}
         pattern.img2stitch_frame = {"w": width_px, "h": height, "ppm": float(WORK_PX_PER_MM),
                                     "cx": 0.0, "cy": 0.0, "scale": 1.0}
         return pattern
@@ -558,7 +623,10 @@ def hand_pattern(source, background="outside", *, n_colors=None, exclude=(), sty
             component_seed = seed + 7919 * (index + 1)
             units, ready, kind = _component_units(labels == index, WORK_PX_PER_MM, style,
                                                   component_seed, creativity=creativity)
-            entries.append({"units": units, "strokes": ready, "kind": kind, "seed": component_seed})
+            for number, unit in enumerate(units):
+                unit["id"] = f"{color_index}-{index}-{number}"
+            entries.append({"units": units, "strokes": ready, "kind": kind, "seed": component_seed,
+                            "id": f"{color_index}-{index}", "mask_stats": [int(v) for v in stats[index, :4]]})
             pending.extend(units)
             shapes += 1
         measured.append((rgb, entries))
@@ -568,13 +636,19 @@ def hand_pattern(source, background="outside", *, n_colors=None, exclude=(), sty
     _assign_families(pending, style, creativity)
 
     zones, segments, tally = [], [], {}
+    stroke_list, stroke_paths = [], []
     first = True
     for rgb, entries in measured:
         strokes, chosen = [], []
         for entry in entries:
             if entry["units"]:
                 pen = hs.Pen(seed=entry["seed"])
-                chosen.append(_draw_units(pen, entry["units"], WORK_PX_PER_MM))
+                chosen.append(_draw_units(pen, entry["units"], WORK_PX_PER_MM, stroke_overrides))
+                for unit in entry["units"]:
+                    stroke_list.append({"id": unit["id"], "color": "#%02x%02x%02x" % tuple(int(v) for v in rgb),
+                                        "kind": (stroke_overrides or {}).get(unit["id"], unit["kind"]),
+                                        "length": round(float(unit["length"]), 2)})
+                    stroke_paths.append(unit["path"].astype(float) / WORK_PX_PER_MM)
                 strokes.extend(pen.strokes)
             else:
                 chosen.append(entry["kind"])
@@ -584,6 +658,10 @@ def hand_pattern(source, background="outside", *, n_colors=None, exclude=(), sty
         for kind in chosen:
             tally[kind] = tally.get(kind, 0) + 1
         color = tuple(int(v) for v in rgb)
+        # Surcharge de couleur : seule la teinte du fil change, pas les points.
+        source_hex = "#%02x%02x%02x" % color
+        if color_overrides and source_hex in color_overrides:
+            color = tuple(int(color_overrides[source_hex].lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
         if not first:
             pattern.add_command(pe.COLOR_CHANGE)
         pattern.add_thread({"color": (color[0] << 16) | (color[1] << 8) | color[2]})
@@ -608,6 +686,7 @@ def hand_pattern(source, background="outside", *, n_colors=None, exclude=(), sty
     xs = [s[0] for s in pattern.stitches]
     ys = [s[1] for s in pattern.stitches]
     ppm = float(WORK_PX_PER_MM)
+    factor = 1.0
     if xs:
         width_mm = (max(xs) - min(xs)) / 10
         height_mm = (max(ys) - min(ys)) / 10
@@ -624,9 +703,12 @@ def hand_pattern(source, background="outside", *, n_colors=None, exclude=(), sty
             ppm /= factor
     pattern.end()
     cx, cy = _center_on_origin(pattern)
+    # Tracés dans le repère final des points (dixièmes de mm), pour la carte de sélection.
+    pattern.img2stitch_stroke_paths = [p * 10 * factor - np.array([cx, cy]) for p in stroke_paths]
     pattern.img2stitch_zones = zones
     pattern.img2stitch_segments = segments
-    pattern.img2stitch_hand = {"stitches": tally, "shapes": shapes}
+    pattern.img2stitch_hand = {"stitches": tally, "shapes": shapes,
+                               "strokes": stroke_list}
     pattern.img2stitch_frame = {"w": width_px, "h": height, "ppm": ppm,
                                 "cx": cx, "cy": cy, "scale": 1.0}
     return pattern
@@ -652,6 +734,8 @@ def hand_stitch_sample_pattern(kind):
         _draw_one(pen, path, half_fn, half_width, kind)
     elif kind == "darning":
         hs.darning(pen, np.ones((15, 52), np.uint8), 1.5)
+    elif kind == "tatami":
+        hs.tatami(pen, np.ones((15, 52), np.uint8), 1.5)
     elif kind == "seed":
         hs.seed(pen, np.ones((15, 52), np.uint8), 1.5, density=0.5)
     elif kind == "french_knot":

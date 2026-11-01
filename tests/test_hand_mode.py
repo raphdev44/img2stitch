@@ -1,3 +1,4 @@
+from urllib.parse import quote
 """Canal « broderie à la main » : création, formulaire, motif non modifiable."""
 import io
 import time
@@ -67,8 +68,39 @@ def test_a_hand_design_cannot_be_modified(tmp_path, monkeypatch):
     assert client.get(f"/motifs/{design_id}/edition").status_code == 302
     assert client.post(f"/api/motifs/{design_id}/optimiser", json={"mode": "simple"}).status_code == 409
     assert client.post(f"/api/motifs/{design_id}/fusion", json={"enabled": True}).status_code == 409
+    # La couleur d'un fil reste modifiable : seule la géométrie est figée.
     assert client.post(f"/api/motifs/{design_id}/fil",
-                       json={"from": meta["threads"][0], "to": "#112233"}).status_code == 409
+                       json={"from": meta["threads"][0], "to": "#112233"}).status_code == 202
+
+
+def test_a_hand_stroke_takes_another_stitch(tmp_path, monkeypatch):
+    from webapp import create_app
+
+    app = create_app({"TESTING": True, "DESIGNS_DIR": str(tmp_path)})
+    monkeypatch.setattr(app.extensions["designs"]._pool, "submit", lambda function, *args: function(*args))
+    meta = _create(app)
+    client = app.test_client()
+    url = f"/api/motifs/{meta['id']}/tracés"
+    stroke = meta["hand_mix"]["strokes"][0]["id"]
+    assert client.post(url, json={"kinds": {"pas-inconnu": "french_knot"}}).status_code == 400
+    assert client.post(url, json={"kinds": {stroke: "pas-un-point"}}).status_code == 400
+    response = client.post(url, json={"kinds": {stroke: "french_knot"}})
+    assert response.status_code == 202, response.get_json()
+    done = _wait(app.extensions["designs"], meta["id"])
+    assert done["status"] == "ready", done.get("error")
+    assert done["hand_overrides"] == {stroke: "french_knot"}
+    page = client.get(f"/motifs/{meta['id']}")
+    assert page.status_code == 200
+    assert f"/motifs/{meta['id']}/{quote('tracés')}" in page.get_data(as_text=True)
+    edit = client.get(f"/motifs/{meta['id']}/tracés")
+    assert edit.status_code == 200
+    assert 'id="hand-list"' in edit.get_data(as_text=True)
+    carte = client.get(f"/motifs/{meta['id']}/fichiers/strokes.png")
+    assert carte.status_code == 200
+    import io
+    from PIL import Image
+    values = set(Image.open(io.BytesIO(carte.get_data())).convert("L").getdata())
+    assert max(values) == len(meta["hand_mix"]["strokes"])
 
 
 def test_the_page_offers_the_hand_form(tmp_path):
@@ -86,7 +118,7 @@ def test_the_page_offers_the_hand_form(tmp_path):
     assert "Automatique" in html
     assert 'id="stitch-help-trigger"' in html
     assert '<dialog class="stitch-help"' in html
-    assert html.count('class="stitch-sample"') == 27
+    assert html.count('class="stitch-sample"') == 28
     assert 'loading="lazy"' in html
     assert "/api/broderie-main/exemples/running.png" in html
     for stitch in ("Point avant", "Point arrière", "Point de tige", "Point fendu",

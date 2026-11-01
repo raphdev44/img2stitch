@@ -12,7 +12,7 @@ from img2stitch.handstitch import STITCH_TYPES
 from img2stitch.photo import render_photo_preview
 
 from .designs import (BACKGROUND_MODES, CROSS_STITCH_MAX_COLORS, DEFAULT_SIZE_MM, FABRICS, FILL_TYPES, FORMATS, MAX_COLORS, MAX_SIZE_MM,
-                      MIN_COLORS, MIN_SIZE_MM, SCAN_ENGINES, ZONES, InvalidImage, analyse_cross_stitch_image, analyse_image,
+                      MIN_COLORS, MIN_SIZE_MM, SCAN_ENGINES, STROKES, ZONES, InvalidImage, analyse_cross_stitch_image, analyse_image,
                       clean_name, export_filename, parse_edits, parse_exclusions)
 from .designs import _HEX_RE as HEX_RE
 from .designs import HAND_CREATIVITY, HAND_STYLES
@@ -293,6 +293,8 @@ def design(design_id):
     return render_template("design.html", d=meta, formats=FORMATS, bg_labels=BG_LABELS,
                            thread_lengths=store().thread_lengths(design_id),
                            hand_labels={key: value[0] for key, value in STITCH_TYPES.items()},
+                           hand_strokes=sorted(((meta.get("hand_mix") or {}).get("strokes") or []),
+                                               key=lambda st: st["length"], reverse=True)[:40],
                            fabrics={k: (FABRIC_LABELS.get(k, k.capitalize()), v) for k, v in FABRICS.items()})
 
 
@@ -304,10 +306,23 @@ def edit(design_id):
     return render_template("edit.html", d=meta, zones=store().zones(design_id), fills=FILL_TYPES)
 
 
+@bp.get("/motifs/<design_id>/tracés")
+def hand_edit(design_id):
+    meta = store().get(design_id) or abort(404)
+    if meta["status"] != "ready" or meta.get("mode") != "hand":
+        return redirect(url_for("web.design", design_id=design_id))
+    # Ordre de génération : c'est celui de la carte des tracés (valeur = rang + 1).
+    strokes = list((meta.get("hand_mix") or {}).get("strokes") or [])
+    return render_template("hand_edit.html", d=meta, strokes=strokes, hand_labels={key: value[0] for key, value in STITCH_TYPES.items()},
+                           stroke_map=url_for("web.design_file", design_id=design_id, name="strokes.png", v=meta.get("photo_version")))
+
+
 @bp.get("/motifs/<design_id>/fichiers/<name>")
 def design_file(design_id, name):
     if name == ZONES and store().get(design_id):
         store().zone_map_path(design_id)
+    if name == STROKES and store().get(design_id):
+        store().stroke_map_path(design_id)
     path = store().file_path(design_id, name) or abort(404)
     return send_file(path, max_age=3600)
 
@@ -407,6 +422,25 @@ def api_recolor(design_id):
         return jsonify(error="Couleur invalide."), 400
     try:
         store().recolor(design_id, old, new)
+    except InvalidImage as e:
+        return jsonify(error=str(e)), 409
+    return jsonify(_public(store().get(design_id))), 202
+
+
+@bp.post("/api/motifs/<design_id>/tracés")
+def api_hand_strokes(design_id):
+    meta = store().get(design_id) or abort(404)
+    body = request.get_json(silent=True) or {}
+    known = {s["id"]: s["kind"] for s in ((meta.get("hand_mix") or {}).get("strokes") or [])}
+    changes = body.get("kinds")
+    if not isinstance(changes, dict) or not changes:
+        return jsonify(error="Aucun tracé à modifier."), 400
+    kinds = set(STITCH_TYPES)
+    for stroke_id, kind in changes.items():
+        if stroke_id not in known or kind not in kinds:
+            return jsonify(error="Tracé ou point invalide."), 400
+    try:
+        store().set_hand_strokes(design_id, {str(k): str(v) for k, v in changes.items()})
     except InvalidImage as e:
         return jsonify(error=str(e)), 409
     return jsonify(_public(store().get(design_id))), 202

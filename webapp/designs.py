@@ -23,7 +23,7 @@ from img2stitch import (Settings, color_palettes, estimate_colors, image_to_patt
                         render_photo_preview, render_raw_preview)
 from img2stitch.algorithm_standard import (SIZE_MARGIN_MM, _region_look, _zone_override, pattern_stats,
                                            pattern_to_image, thread_lengths_mm)
-from img2stitch.cross_stitch import MAX_COLORS as CROSS_STITCH_MAX_COLORS, cross_stitch_palettes, cross_stitch_pattern
+from img2stitch.cross_stitch import MAX_COLORS as CROSS_STITCH_MAX_COLORS, cross_stitch_palettes, cross_stitch_pattern, pixelate_for_cross_stitch
 from img2stitch.fill import FILL_TYPES
 from img2stitch.hand import CREATIVITY as HAND_CREATIVITY
 from img2stitch.hand import STYLES as HAND_STYLES, hand_pattern
@@ -66,9 +66,11 @@ FORMATS = {
     "pec": "Brother (PEC)",
 }
 SOURCE, RAW, PHOTO, THUMB, META = "source.png", "preview_raw.png", "preview_photo.png", "thumb.jpg", "meta.json"
+SOURCE_ORIGINAL = "source_original.png"
 PATTERN_DATA = "pattern.json"  # points et couleurs exacts, pour refaire un aperçu sans régénérer le motif
 ZONES = "zones.png"  # carte des zones (index du bloc de couleur + 1), même cadrage que l'aperçu réaliste
-PUBLIC_FILES = {SOURCE, RAW, PHOTO, THUMB, ZONES}
+STROKES = "strokes.png"  # carte des tracés à la main (index du tracé + 1), même cadrage que zones.png
+PUBLIC_FILES = {SOURCE, RAW, PHOTO, THUMB, ZONES, STROKES}
 MIN_COLORS, MAX_COLORS = 1, 12
 MAX_NAME = 80
 MIN_SIZE_MM, MAX_SIZE_MM, DEFAULT_SIZE_MM = 10, 400, 100
@@ -178,13 +180,72 @@ class DesignStore:
         """Change la couleur d'un fil dans toute la broderie : toutes les zones de ce fil prennent `new`."""
         if new == old:
             return
-        if self.get(design_id).get("mode") in ("hand", "streamline"):
-            raise InvalidImage("Une broderie à la main ne se modifie pas : recréez un motif depuis l'image.")
-        if self.get(design_id).get("mode") == "cross_stitch":
+        mode = self.get(design_id).get("mode")
+        if mode == "hand":
+            self._change_hand_colors(design_id, old, new)
+            return
+        if mode == "cross_stitch":
             self._change_cross_stitch_palette(design_id, recolor=(old, new))
+            return
+        if mode == "streamline":
+            self._change_streamline_colors(design_id, old, new)
             return
         self.apply_edits(design_id, [{"color": new if z["color"] == old else z["color"], "fill": z["fill"],
                                       "outline": z["outline"]} for z in self.zones(design_id)])
+
+    def _change_hand_colors(self, design_id, old, new):
+        """Recolore un fil d'un motif à la main : la géométrie reste identique, seule la couleur change."""
+        d = self.dir(design_id)
+        with self._modify_lock:
+            meta = self._read(d)
+            if meta.get("status") != "ready":
+                raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
+            colors = dict(meta.get("hand_colors") or {})
+            for source in [z["source"] for z in meta.get("zones") or []]:
+                if colors.get(source, source) == old:
+                    colors[source] = new
+            meta.update(hand_colors=colors, zones_previous=meta.get("zones"),
+                        regions_previous=meta.get("regions"), editing=True, status="processing",
+                        step="Mise à jour des couleurs", progress=5, error=None, edit_error=None)
+            self._write(d, meta)
+        self._pool.submit(self._generate, d)
+
+    def set_hand_strokes(self, design_id, changes):
+        """Change le point d'un ou plusieurs tracés d'un motif à la main ; la géométrie reste identique.
+
+        `changes` : {identifiant de tracé: type de point}. Les autres tracés gardent leur point.
+        """
+        d = self.dir(design_id)
+        with self._modify_lock:
+            meta = self._read(d)
+            if meta.get("mode") != "hand":
+                raise InvalidImage("Seul un motif à la main peut être modifié tracé par tracé.")
+            if meta.get("status") != "ready":
+                raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
+            overrides = dict(meta.get("hand_overrides") or {})
+            overrides.update(changes)
+            meta.update(hand_overrides=overrides, zones_previous=meta.get("zones"),
+                        regions_previous=meta.get("regions"), editing=True, status="processing",
+                        step="Mise à jour des tracés", progress=5, error=None, edit_error=None)
+            self._write(d, meta)
+        self._pool.submit(self._generate, d)
+
+    def _change_streamline_colors(self, design_id, old, new):
+        """Recolore un fil d'un motif streamline : les lignes restent identiques, seule la couleur change."""
+        d = self.dir(design_id)
+        with self._modify_lock:
+            meta = self._read(d)
+            if meta.get("status") != "ready" or meta.get("photo_rendering"):
+                raise InvalidImage("Le motif est en cours de traitement, réessayez dans un instant.")
+            colors = dict(meta.get("streamline_colors") or {})
+            for source in [z["source"] for z in meta.get("zones") or []]:
+                if colors.get(source, source) == old:
+                    colors[source] = new
+            meta.update(streamline_colors=colors, zones_previous=meta.get("zones"),
+                        regions_previous=meta.get("regions"), editing=True, status="processing",
+                        step="Mise à jour des couleurs", progress=5, error=None, edit_error=None)
+            self._write(d, meta)
+        self._pool.submit(self._generate, d)
 
     def set_cross_stitch_colors(self, design_id, n_colors):
         if n_colors is not None and (isinstance(n_colors, bool) or not isinstance(n_colors, int)
@@ -388,6 +449,14 @@ class DesignStore:
         return [{"source": c, "color": c, "fill": "tatami", "outline": True, "region": None}
                 for c in meta.get("threads") or []]
 
+    def stroke_map_path(self, design_id):
+        d = self.dir(design_id)
+        if d is None:
+            return None
+        if not (d / STROKES).is_file():  # motifs à la main créés avant l'édition par tracé
+            _write_atomic(d / STROKES, lambda p: _render_stroke_map(_load_pattern(d), p))
+        return d / STROKES
+
     def zone_map_path(self, design_id):
         d = self.dir(design_id)
         if d is None:
@@ -504,22 +573,37 @@ class DesignStore:
             hand = meta.get("mode") == "hand"
             s = Settings() if (cross_stitch or hand or streamline) else _settings(meta)
             if cross_stitch:
+                cs_options = dict(source_format=meta.get("source_format"),
+                                  n_colors=meta.get("cross_stitch_color_limit"),
+                                  exclude=_exclude_setting(meta.get("excluded", [])),
+                                  double=bool(meta.get("cross_stitch_double")),
+                                  color_overrides=[(_rgb(src), _rgb(dst)) for src, dst in
+                                                   (meta.get("cross_stitch_colors") or {}).items()])
                 try:
-                    pattern = cross_stitch_pattern(d / SOURCE, meta["background"],
-                                                   source_format=meta.get("source_format"),
-                                                   n_colors=meta.get("cross_stitch_color_limit"),
-                                                   exclude=_exclude_setting(meta.get("excluded", [])),
-                                                   double=bool(meta.get("cross_stitch_double")),
-                                                   color_overrides=[(_rgb(src), _rgb(dst)) for src, dst in
-                                                                    (meta.get("cross_stitch_colors") or {}).items()])
+                    pattern = cross_stitch_pattern(d / SOURCE, meta["background"], **cs_options)
                 except ValueError as exc:
-                    raise InvalidImage(str(exc)) from exc
+                    if meta.get("cross_stitch_pixelated") or not _not_pixel_art(exc):
+                        raise InvalidImage(str(exc)) from exc
+                    # Image quelconque : on la pixelise, on garde l'original, puis on relance une fois.
+                    original = d / SOURCE_ORIGINAL
+                    if not original.exists():
+                        shutil.copyfile(d / SOURCE, original)
+                    pixelated = pixelate_for_cross_stitch(original)
+                    pixelated.save(d / SOURCE, "PNG")
+                    meta.update(cross_stitch_pixelated=True, source_format=None)
+                    self._write(d, meta)
+                    try:
+                        pattern = cross_stitch_pattern(d / SOURCE, meta["background"], **cs_options)
+                    except ValueError as retry_exc:
+                        raise InvalidImage(str(retry_exc)) from retry_exc
             elif hand:
                 pattern = hand_pattern(d / SOURCE, meta["background"], n_colors=meta.get("n_colors") or None,
                                        exclude=_exclude_setting(meta.get("excluded", [])),
                                        style=meta.get("hand_style") or "auto",
                                        creativity=meta.get("hand_creativity") or 3,
-                                       target_mm=meta.get("target_mm") or None)
+                                       target_mm=meta.get("target_mm") or None,
+                                       color_overrides=meta.get("hand_colors") or None,
+                                       stroke_overrides=meta.get("hand_overrides") or None)
             else:
                 if streamline:
                     # La génération streamlines dure plusieurs dizaines de secondes : on suit
@@ -553,12 +637,15 @@ class DesignStore:
                 self._update(d, meta, progress=50 + round(25 * index / len(FORMATS)))
             _write_atomic(d / PATTERN_DATA, lambda p: _save_pattern(pattern, p))
             _write_atomic(d / ZONES, lambda p: _render_zone_map(pattern, p))
+            if hand:
+                _write_atomic(d / STROKES, lambda p: _render_stroke_map(pattern, p))
 
             x0, y0, x1, y1 = stitch_bbox_mm(pattern)
             _write_atomic(d / RAW, lambda p: render_raw_preview(pattern, p))
             if streamline:
                 # Une région brodée = un bloc de fil (passage fond puis passage motif).
-                zones = [{"source": _hex(src), "color": _hex(src), "fill": "streamline",
+                chosen = meta.get("streamline_colors") or {}
+                zones = [{"source": _hex(src), "color": chosen.get(_hex(src), _hex(src)), "fill": "streamline",
                           "outline": False, "region": None}
                          for src, _ in getattr(pattern, "img2stitch_zones", [])]
                 regions = []
@@ -566,8 +653,9 @@ class DesignStore:
                             streamline_info=getattr(pattern, "img2stitch_streamline", None))
             elif hand:
                 # Une broderie à la main n'a pas de zones : chaque forme a reçu son point à la création.
-                zones = [{"source": _hex(src), "color": _hex(src), "fill": "hand", "outline": False,
-                          "region": None} for src, _ in getattr(pattern, "img2stitch_zones", [])]
+                chosen = meta.get("hand_colors") or {}
+                zones = [{"source": _hex(src), "color": chosen.get(_hex(src), _hex(src)), "fill": "hand",
+                          "outline": False, "region": None} for src, _ in getattr(pattern, "img2stitch_zones", [])]
                 regions = []
                 meta.update(n_colors=len(pattern.threadlist),
                             hand_mix=getattr(pattern, "img2stitch_hand", None))
@@ -778,6 +866,12 @@ def _hex(c):
     return "#%02x%02x%02x" % tuple(c)
 
 
+def _not_pixel_art(exc):
+    """Vrai si l'erreur signale une image qui n'est pas du pixel art (et non une image trop grande)."""
+    text = str(exc)
+    return "Quadrillage ou blocs de pixels non détectés" in text or "40 000" in text
+
+
 def _rgb(h):
     return tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
 
@@ -829,6 +923,7 @@ def _streamline_pattern(d, meta, progress_callback=None):
             line_width_mm=o.get("line_width_mm", 0.4),
             background_fill=o.get("background_fill", True),
             relax_iterations=o.get("relax_iterations", 7),
+            color_overrides=[(_rgb(src), _rgb(dst)) for src, dst in (meta.get("streamline_colors") or {}).items()],
             progress_callback=progress_callback)
     except ValueError as exc:
         raise InvalidImage(str(exc)) from exc
@@ -923,6 +1018,23 @@ def _render_zone_map(pattern, path, ppm=5, margin_mm=6):
             ci += 1
         last = cur
     Image.fromarray(zmap, "L").save(path, "PNG")
+
+
+def _render_stroke_map(pattern, path, ppm=5, margin_mm=6):
+    """Carte des tracés : chaque tracé dessiné avec la valeur (index + 1), cadrage identique à
+    _render_zone_map pour retrouver le tracé cliqué sur l'aperçu. Valeur 0 = fond."""
+    paths = getattr(pattern, "img2stitch_stroke_paths", None) or []
+    x0, y0, x1, y1 = stitch_bbox_mm(pattern)
+    W, H = int((x1 - x0 + 2 * margin_mm) * ppm), int((y1 - y0 + 2 * margin_mm) * ppm)
+    smap = np.zeros((H, W), np.uint8)
+    width = max(3, round(0.9 * ppm))
+    for index, pts in enumerate(paths[:254]):
+        line = [(round((x / 10 - x0 + margin_mm) * ppm), round((y / 10 - y0 + margin_mm) * ppm))
+                for x, y in pts]
+        if len(line) == 1:
+            line.append(line[0])
+        cv2.polylines(smap, [np.array(line, np.int32)], False, index + 1, width)
+    Image.fromarray(smap, "L").save(path, "PNG")
 
 
 def _save_pattern(pattern, path):

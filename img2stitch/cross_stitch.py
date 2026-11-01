@@ -140,6 +140,26 @@ def _limit_cell_colors(cells):
     return cells
 
 
+def pixelate_for_cross_stitch(source, cell_px=None):
+    """Pixelise une image quelconque en blocs réguliers, avec une palette réduite.
+
+    Sert de repli quand une image n'est pas reconnue comme pixel art : chaque bloc prend la couleur
+    moyenne de sa zone, puis la palette est ramenée à MAX_SOURCE_COLORS. Renvoie une image RGBA.
+    """
+    if not isinstance(source, Image.Image):
+        with Image.open(source) as image:
+            return pixelate_for_cross_stitch(image, cell_px)
+    image = ImageOps.exif_transpose(source).convert("RGBA")
+    if cell_px is None:
+        # Une grille d'au plus 150 cases par côté, sous la limite de 40 000 cases.
+        cell_px = max(1, -(-max(image.size) // 150))
+    cols = max(1, round(image.width / cell_px))
+    rows = max(1, round(image.height / cell_px))
+    small = image.resize((cols, rows), Image.Resampling.BOX)
+    cells = _limit_cell_colors(np.array(small, dtype=np.uint8))
+    return Image.fromarray(cells, "RGBA")
+
+
 def _cell_palette(cells, tolerance=0):
     visible = cells[:, :, 3] >= 128
     colors = Counter(map(tuple, cells[:, :, :3][visible].tolist()))

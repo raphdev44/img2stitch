@@ -112,7 +112,7 @@ def _emit(pattern, lines, previous):
 def streamline_pattern(path, *, n_colors, background="auto", background_tolerance=40,
                        background_scope="all", exclude=(), line_width_mm=LINE_WIDTH_MM,
                        target_mm=None, background_fill=True, step=1800, step_size=0.001,
-                       relax_iterations=relax.ITERATIONS,
+                       relax_iterations=relax.ITERATIONS, color_overrides=(),
                        progress_callback=None):
     """Photo -> motif de broderie en streamlines. Lève ValueError si rien n'est brodable.
 
@@ -197,6 +197,7 @@ def streamline_pattern(path, *, n_colors, background="auto", background_toleranc
         mm = [(np.asarray(line, float) * size) for line in lines]
         total_lines += len(mm)
         rgb = tuple(int(max(0, min(255, c))) for c in color)
+        rgb = dict(color_overrides).get(rgb, rgb)     # couleur de fil choisie par l'utilisateur
         pattern.add_thread({"color": (rgb[0] << 16) | (rgb[1] << 8) | rgb[2]})
         if zones:   # add_thread ne pique rien : sans ce changement, tout sortirait d'un seul fil
             pattern.add_stitch_absolute(pe.COLOR_CHANGE, previous[0] * UNIT, previous[1] * UNIT)

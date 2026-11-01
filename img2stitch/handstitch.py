@@ -119,7 +119,7 @@ def arc(center, radius, start, stop, count=12):
     return np.stack((center[0] + radius * np.cos(angles), center[1] + radius * np.sin(angles)), axis=1)
 
 
-# --- points de trait ---------------------------------------------------------------------
+# --- points de trait -------------------------------------------------------------
 
 def running(pen, path, length=2.6, gap=0.35, spread=0.22):
     """Point avant : petits traits séparés par un vide, le long du tracé."""
@@ -448,7 +448,7 @@ def overlock(pen, path, half_width=1.2, length=1.8, loop_ratio=0.4):
 
 
 def e_stitch(pen, path, half_width=1.2, spacing=2.0, bar=0.55):
-    """Point en E : un rail, des jambes vers un bord et une petite barre à leur bout.
+    """Point en E : un rail, des jambes vers un bord et une petite barre au bout.
 
     « e_stitch » de stitch_generator : la ligne du tracé, puis de petits traits qui pointent de
     côté ; la barre ajoutée au bout de chaque jambe est ce qui fait lire un E.
@@ -533,8 +533,12 @@ def darning(pen, mask, px_per_mm, spacing=1.3, length=3.2):
                          ((min(x + every // 2, mask.shape[1] - 1)) / px_per_mm, y / px_per_mm)])
 
 
+
 def seed(pen, mask, px_per_mm, density=0.9, length=1.5):
-    """Point de graine : petits points dispersés, dans tous les sens."""
+    """Point de graine : petits points dispersés, dans tous les sens.
+
+    Place des points aléatoires sur le masque avec une densité contrôlée.
+    """
     rows, cols = np.nonzero(mask)
     if not len(rows):
         return
@@ -547,8 +551,63 @@ def seed(pen, mask, px_per_mm, density=0.9, length=1.5):
         size = pen.length(length, 0.3)
         pen.put([(x, y), (x + math.cos(angle) * size, y + math.sin(angle) * size)])
 
+def laid(pen, mask, px_per_mm, spacing=1.2, length=3.0, randomness=0.3):
+    """Point couché : longues traversées parallèles posées en quinconce sur la surface.
 
-# --- motifs (fleurs, feuilles, nœuds) ----------------------------------------------------
+    Chaque rang est décalé d'une demi-longueur par rapport au précédent (briques), et chaque
+    point varie un peu en position et en longueur, comme une main qui ne mesure pas à la règle.
+    """
+    rows, cols = np.nonzero(mask)
+    if not len(rows):
+        return
+    y0, y1 = int(rows.min()), int(rows.max())
+    step = max(2, round(spacing * px_per_mm))
+    every = max(2, round(length * px_per_mm))
+    jitter = max(0, round(randomness * every / 2))
+    for index, y in enumerate(range(y0, y1 + 1, step)):
+        xs = np.flatnonzero(mask[y])
+        if not len(xs):
+            continue
+        x_min, x_max = int(xs.min()), int(xs.max())
+        rng = np.random.default_rng(index * 7919 + 42)
+        start = x_min - (every // 2 if index % 2 else 0)
+        for x in range(start, x_max + 1, every):
+            a = max(x_min, min(x_max, x + int(rng.integers(-jitter, jitter + 1))))
+            b = max(x_min, min(x_max, a + every + int(rng.integers(-jitter, jitter + 1))))
+            if b - a >= 2:
+                pen.put([(a / px_per_mm, y / px_per_mm), (b / px_per_mm, y / px_per_mm)])
+
+
+def tatami(pen, mask, px_per_mm, spacing=1.1, length=2.4, gap=0.6, randomness=0.45):
+    """Tatami irrégulier : petits points avant en rangées décalées, longueurs et écarts variés.
+
+    Comme le point avant, chaque point est un petit trait séparé par un vide ; contrairement
+    au tatami machine, rangs et longueurs ne sont jamais réguliers, comme une main qui remplit.
+    """
+    rows, cols = np.nonzero(mask)
+    if not len(rows):
+        return
+    y0, y1 = int(rows.min()), int(rows.max())
+    step = max(2, round(spacing * px_per_mm))
+    base = max(2, round(length * px_per_mm))
+    span = max(2, round((length + gap) * px_per_mm))
+    jitter = max(0, round(randomness * base / 2))
+    for index, y in enumerate(range(y0, y1 + 1, step)):
+        xs = np.flatnonzero(mask[y])
+        if not len(xs):
+            continue
+        x_min, x_max = int(xs.min()), int(xs.max())
+        rng = np.random.default_rng(index * 6271 + 17)
+        x = x_min - (span // 2 if index % 2 else 0) + int(rng.integers(-jitter, jitter + 1))
+        while x < x_max:
+            a = max(x_min, min(x_max, x + int(rng.integers(-jitter, jitter + 1))))
+            b = max(x_min, min(x_max, a + base + int(rng.integers(-jitter, jitter + 1))))
+            if b - a >= 2 and mask[y, a] and mask[y, b]:
+                pen.put([(a / px_per_mm, y / px_per_mm), (b / px_per_mm, y / px_per_mm)])
+            x += span + int(rng.integers(-jitter, jitter + 1))
+
+
+# --- motifs (fleurs, feuilles, nœuds) ------------------------------------------
 
 def french_knot(pen, center, radius=0.85, turns=2.4):
     """Nœud français : un point enroulé qui forme une petite bosse ronde."""
@@ -644,7 +703,7 @@ def tulip(pen, base, tip, width=1.6):
                  mid - normal * width * 0.1 * side, base])
 
 
-# --- catalogue (interface) ---------------------------------------------------------------
+# --- catalogue (interface) -------------------------------------------------------
 
 # family : "trait" (ligne), "bande" (surface étroite), "motif" (fleur, feuille, nœud).
 STITCH_TYPES = {
@@ -656,6 +715,7 @@ STITCH_TYPES = {
     "couching": ("Point posé", "Fil épais retenu par de petits points en travers.", "trait"),
     "cross_stitch": ("Point de croix", "Deux diagonales croisées, en file.", "trait"),
     "darning": ("Point de reprisage", "Rangées de points avant décalées en briques.", "trait"),
+    "tatami": ("Tatami irrégulier", "Petits points avant en rangées décalées, longueurs variées.", "trait"),
     "satin": ("Point passé", "Points serrés d'un bord à l'autre, long-and-short.", "bande"),
     "fishbone": ("Point d'arête", "Points en arête de poisson autour d'une nervure.", "bande"),
     "herringbone": ("Point de filet", "Diagonales croisées en épi.", "bande"),

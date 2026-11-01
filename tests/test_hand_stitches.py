@@ -66,19 +66,19 @@ def test_seed_and_darning_fill_a_mask_without_flooding_it():
 
 
 def test_choose_stitch_follows_the_shape():
-    assert choose_stitch(0.45, 20) == "back"      # trait très fin : ligne continue
-    assert choose_stitch(0.9, 20, encloses=True) == "back"
+    assert choose_stitch(0.45, 20) == "split"      # trait très fin : au cran par défaut, point sobre
+    assert choose_stitch(0.9, 20, encloses=True) == "split"    # cran par défaut : pas de point arrière
     assert choose_stitch(0.9, 20) == "stem"
     assert choose_stitch(1.8, 20) == "stem"
-    assert choose_stitch(3.0, 20) == "chain"
+    assert choose_stitch(3.0, 20) == "split"      # chaînette refusée au cran 3 : son point classique
     assert choose_stitch(5.0, 20, creativity=5) == "fishbone"   # arête : cran le plus décoratif
-    assert choose_stitch(5.0, 20) == "satin"                     # au cran par défaut, une bande satin
-    assert choose_stitch(5.0, 8) == "satin"
+    assert choose_stitch(5.0, 20) == "running"                  # au cran par défaut, point sobre (satin dès le cran 4)
+    assert choose_stitch(5.0, 8) == "running"   # satin dès le cran 4
     assert choose_stitch(0.8, 0.8, roundness=0.95, area_mm2=0.5) == "french_knot"
-    assert choose_stitch(5.0, 5.0, roundness=0.9, area_mm2=40) == "woven_wheel"
-    assert choose_stitch(12, 80, roundness=0.85) == "seed"
-    assert choose_stitch(12, 12, roundness=0.8, area_mm2=200) == "seed"
-    assert choose_stitch(12, 80, roundness=0.2) == "darning"
+    assert choose_stitch(5.0, 5.0, roundness=0.9, area_mm2=40, creativity=5) == "woven_wheel"  # roue tissée au cran 5
+    assert choose_stitch(12, 80, roundness=0.85, creativity=4) == "seed"
+    assert choose_stitch(12, 12, roundness=0.8, area_mm2=200, creativity=4) == "seed"
+    assert choose_stitch(12, 80, roundness=0.2, creativity=4) == "tatami"   # reprise : tatami irrégulier dès le cran 4
     assert choose_stitch(3.0, 20, style="chainette") == "chain"
     assert choose_stitch(3.0, 20, style="feuilles") == "fishbone"
     assert choose_stitch(3.0, 20, style="croix") == "cross_stitch"
@@ -86,20 +86,20 @@ def test_choose_stitch_follows_the_shape():
 
 def test_creativity_gauge_only_moves_how_daring_the_stitches_are():
     leaf = {"taper": 0.7}
-    assert choose_stitch(2.4, 14, creativity=1, **leaf) == "satin"      # feuille : satin sobre
-    assert choose_stitch(2.4, 14, creativity=2, **leaf) == "satin"
-    assert choose_stitch(2.4, 14, creativity=3, **leaf) == "fern"       # fougère à partir du milieu
+    assert choose_stitch(2.4, 14, creativity=1, **leaf) == "running"    # feuille : point sobre au cran 1
+    assert choose_stitch(2.4, 14, creativity=2, **leaf) == "running"
+    assert choose_stitch(2.4, 14, creativity=3, **leaf) == "running"    # au cran 3 : tige et split seulement
     ribbon = {"straight": 0.99}
-    assert choose_stitch(3.0, 40, creativity=1, **ribbon) == "split"    # ruban : corde classique
-    assert choose_stitch(3.0, 40, creativity=2, **ribbon) == "chain"
-    assert choose_stitch(3.0, 40, creativity=3, **ribbon) == "chain"
+    assert choose_stitch(3.0, 40, creativity=1, **ribbon) == "running"  # ruban : point sobre au cran 1
+    assert choose_stitch(3.0, 40, creativity=2, **ribbon) == "running"
+    assert choose_stitch(3.0, 40, creativity=3, **ribbon) == "running"
     assert choose_stitch(3.0, 40, creativity=4, **ribbon) == "chevron"
     edge = {"encloses": True, "big_ring": True}
-    assert choose_stitch(2.0, 40, creativity=2, **edge) == "back"       # bordure : trait arrière
-    assert choose_stitch(2.0, 40, creativity=3, **edge) == "blanket"    # feston au milieu
+    assert choose_stitch(2.0, 40, creativity=2, **edge) == "running"    # bordure : point sobre au cran 2
+    assert choose_stitch(2.0, 40, creativity=3, **edge) == "running"    # au cran 3 : pas encore de feston
     wheel = {"roundness": 0.9, "area_mm2": 40}
     assert choose_stitch(5.0, 5.0, creativity=2, **wheel) == "french_knot"
-    assert choose_stitch(5.0, 5.0, creativity=3, **wheel) == "woven_wheel"
+    assert choose_stitch(5.0, 5.0, creativity=3, **wheel) == "french_knot"  # roue tissée dès le cran 4
     # une famille imposée garde le point demandé, quel que soit le cran
     assert choose_stitch(3.0, 20, style="chainette", creativity=1) == "chain"
     assert choose_stitch(2.4, 14, style="feuilles", creativity=1) == "stem"
@@ -128,4 +128,4 @@ def test_similar_strokes_share_one_stitch_and_roles_stay_distinct():
 def test_creativity_stays_inside_the_five_notches():
     for level in (-3, 0, 1, 3, 5, 9, None):
         kind = choose_stitch(3.0, 40, straight=0.99, creativity=level)
-        assert kind in ("split", "chain", "chevron")
+        assert kind in ("running", "split", "chain", "chevron", "stem", "satin", "back", "fishbone", "lattice", "e_stitch", "arrow_chain")

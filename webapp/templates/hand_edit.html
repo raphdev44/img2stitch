@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Tracés · {{ d.name }}{% endblock %}
+{% block page %}edit{% endblock %}
+{% block theme %}create{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <a href="{{ url_for('web.design', design_id=d.id) }}" class="back">← Retour au motif</a>
+    <h1>Tracés de « {{ d.name }} »</h1>
+    <p class="muted">Cliquez sur un tracé de l'aperçu pour changer son point. Son tracé ne change pas.</p>
+  </div>
+</div>
+
+<div class="design-layout" id="hand-editor"
+     data-api="{{ url_for('web.api_hand_strokes', design_id=d.id) }}"
+     data-labels="{{ url_for('web.design', design_id=d.id) }}">
+  <section class="card stage-card">
+    <div class="stage editor-stage" id="hand-stage">
+      <div class="editor-canvas" id="hand-canvas">
+        <img id="hand-img" src="{{ url_for('web.design_file', design_id=d.id, name='preview_raw.png', v=d.photo_version) }}"
+             alt="Aperçu du motif : cliquez sur un tracé pour le modifier" draggable="false">
+        <img id="hand-map" src="{{ stroke_map }}" alt="" aria-hidden="true" hidden>
+      </div>
+    </div>
+    <p class="hint">Les tracés sont repris de la carte de sélection ; le repère reste celui de l'aperçu.</p>
+  </section>
+
+  <aside class="side">
+    <section class="card">
+      <h2>Tracé choisi</h2>
+      <p class="hint" id="hand-selected">Aucun tracé sélectionné.</p>
+      <label class="field" for="hand-kind" hidden>Point</label>
+      <select id="hand-kind" aria-label="Point du tracé" disabled>
+        {% for key, label in hand_labels.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+      </select>
+      <div class="edit-actions">
+        <button type="button" class="btn-primary" id="hand-apply" disabled>
+          <span class="btn-label">Appliquer</span><span class="spinner" aria-hidden="true"></span>
+        </button>
+      </div>
+      <p class="form-error" id="hand-error" role="alert" hidden></p>
+    </section>
+
+    <section class="card">
+      <h2>Tous les tracés</h2>
+      <ol class="threads" id="hand-list">
+        {% for st in strokes %}
+        <li>
+          <button type="button" class="thread-pick" data-id="{{ st.id }}">
+            <span class="thread-name">{{ st.id }} · {{ '%.1f' | format(st.length) }} mm</span>
+            <span class="thread-kind">{{ hand_labels[st.kind] }}</span>
+          </button>
+        </li>
+        {% endfor %}
+      </ol>
+    </section>
+  </aside>
+</div>
+
+<script type="application/json" id="hand-data">{{ {"strokes": strokes} | tojson }}</script>
+<script>
+(() => {
+  const root = document.getElementById("hand-editor");
+  const data = JSON.parse(document.getElementById("hand-data").textContent);
+  const byId = Object.fromEntries(data.strokes.map((s) => [s.id, s]));
+  const img = document.getElementById("hand-img");
+  const map = document.getElementById("hand-map");
+  const select = document.getElementById("hand-kind");
+  const apply = document.getElementById("hand-apply");
+  const label = document.getElementById("hand-selected");
+  const err = document.getElementById("hand-error");
+  const list = document.getElementById("hand-list");
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  let mapData = null;
+  let current = null;
+
+  // Le repère de la carte est celui de l'aperçu : même cadrage, donc même proportion.
+  map.onload = () => {
+    canvas.width = map.naturalWidth;
+    canvas.height = map.naturalHeight;
+    ctx.drawImage(map, 0, 0);
+    mapData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  };
+  if (map.complete && map.naturalWidth) map.onload();
+
+  // Index du tracé = valeur du pixel - 1 ; la liste de données est triée comme la carte.
+  const ordered = data.strokes.map((s, i) => ({ ...s, index: i }));
+  function strokeAt(event) {
+    if (!mapData) return null;
+    const rect = img.getBoundingClientRect();
+    const x = Math.round(((event.clientX - rect.left) / rect.width) * canvas.width);
+    const y = Math.round(((event.clientY - rect.top) / rect.height) * canvas.height);
+    if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return null;
+    const value = mapData[(y * canvas.width + x) * 4];
+    return value ? ordered[value - 1] || null : null;
+  }
+
+  function select_(stroke) {
+    current = stroke;
+    err.hidden = true;
+    if (!stroke) {
+      label.textContent = "Aucun tracé sélectionné.";
+      select.disabled = true;
+      apply.disabled = true;
+      return;
+    }
+    label.textContent = `Tracé ${stroke.id} · ${stroke.length.toFixed(1)} mm`;
+    select.value = stroke.kind;
+    select.disabled = false;
+    apply.disabled = false;
+    list.querySelectorAll(".thread-pick").forEach((b) => b.classList.toggle("active", b.dataset.id === stroke.id));
+  }
+
+  img.addEventListener("click", (event) => select_(strokeAt(event)));
+  list.querySelectorAll(".thread-pick").forEach((b) => {
+    b.addEventListener("click", () => select_(byId[b.dataset.id]));
+  });
+
+  apply.addEventListener("click", async () => {
+    if (!current) return;
+    err.hidden = true;
+    apply.disabled = true;
+    try {
+      const res = await fetch(root.dataset.api, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kinds: { [current.id]: select.value } }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Le point n'a pas pu être modifié.");
+      window.location.reload();
+    } catch (ex) {
+      err.textContent = ex.message;
+      err.hidden = false;
+      apply.disabled = false;
+    }
+  });
+})();
+</script>
+{% endblock %}
