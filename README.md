@@ -20,6 +20,11 @@ le plus grand possible tout en tenant strictement dans ce rectangle, proportions
 
 ## Algorithmes de numérisation
 `--engine standard` (défaut) découpe l'image en masques de pixels et remplit ces masques rangée par rangée.
+Une forme plus fine que 2 mm (trait, lettrage ; les zones de moins de 10 mm² sont laissées telles quelles)
+n'est pas hachée : ses rangées mesureraient 1 mm de long
+et le parcours les relierait par des allers-retours dans tous les sens. Elle reçoit un remplissage en
+contours concentriques, qui suit la bande sur toute sa longueur : le trait reste plein, avec deux fois
+moins de points et de sauts (muguet de test : 2250 → 1448 points, 27 → 12 sauts, 19 → 11 coupes).
 `--engine vector` (option « Par vectorisation (vpype) » du formulaire) passe par une géométrie :
 
 1. contours extraits en suréchantillonnage puis simplifiés — les bords suivent les courbes au lieu de l'escalier de pixels ;
@@ -73,6 +78,14 @@ Les deux **dupliquent le motif** (même image, mêmes réglages) et n’optimise
 d’origine reste intact dans la galerie. La copie est nommée « nom - optimisé » (simple) ou
 « nom - optimisé+ » (radicale) et l’application bascule dessus une fois la copie créée ; ses exports
 et aperçus sont propres à la version optimisée.
+
+**Aperçu animé** : l’onglet « Animé » (à côté de Réaliste / Simple / Original) rejoue le parcours
+de la machine en accéléré, dans l’ordre exact des commandes du fichier. Le fil se dessine, les sauts
+apparaissent en pointillé, les coupes en croix et les changements de fil en cercle ; on peut mettre
+en pause, faire défiler le film et choisir la vitesse (de 0,25× à 8×). À chaque saut, le film marque
+une pause d’une demi-seconde : l’aiguille reste sur place avant de repartir. Les données viennent de
+`/motifs/<id>/parcours.json` (`img2stitch/playback.py`), calculées depuis le motif stocké : aucun
+nouveau fichier n’est écrit.
 
 **Optimisation simple** (conservatrice) : nettoie les points identiques et les micro-points (avec un
 garde-fou de 25 % par séquence), fusionne les points alignés, limite les points piqués à 12 mm et

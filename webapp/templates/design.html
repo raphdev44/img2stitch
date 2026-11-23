@@ -68,12 +68,14 @@
      data-has-raw="{{ d.has_raw | int }}" data-has-photo="{{ d.has_photo | int }}"
      data-photo-rendering="{{ d.photo_rendering | default(false) | int }}"
      data-api="{{ url_for('web.api_get', design_id=d.id) }}"
+     data-playback="{{ url_for('web.design_playback', design_id=d.id, v=d.photo_version) }}"
      data-optimize="{{ url_for('web.api_optimize', design_id=d.id) }}">
   <section class="card stage-card">
     <div class="stage-toolbar">
       <div class="segmented" role="tablist" aria-label="Type d'aperçu">
         <button role="tab" data-view="photo" {{ 'disabled' if not d.has_photo }}>Réaliste</button>
         <button role="tab" data-view="raw" {{ 'disabled' if not d.has_raw }}>Simple</button>
+        <button role="tab" data-view="anim" {{ 'disabled' if d.status != 'ready' }}>Animé</button>
         <button role="tab" data-view="source">Original</button>
       </div>
       {% if d.status == 'ready' %}
@@ -97,6 +99,9 @@
       {% if d.has_photo %}<img data-view="photo" src="{{ url_for('web.design_file', design_id=d.id, name='preview_photo.png', v=v) }}" alt="Rendu réaliste de la broderie" draggable="false">{% endif %}
       {% if d.has_raw %}<img data-view="raw" src="{{ url_for('web.design_file', design_id=d.id, name='preview_raw.png', v=v) }}" alt="Tracé des points" draggable="false">{% endif %}
       <img data-view="source" src="{{ url_for('web.design_file', design_id=d.id, name='source.png') }}" alt="Image d'origine" draggable="false">
+      {% if d.status == 'ready' %}
+      <canvas data-view="anim" id="anim-canvas" aria-label="Film du parcours de broderie"></canvas>
+      {% endif %}
       <div class="stage-progress" id="photo-progress" hidden>
         <span class="spinner big"></span>
         <strong>Nouveau rendu réaliste…</strong>
@@ -118,6 +123,26 @@
         <progress class="task-progress" id="optimize-progress-bar" max="100" aria-label="Progression de l'optimisation"></progress>
       </div>
     </div>
+    {% if d.status == 'ready' %}
+    <div class="anim-bar" id="anim-bar" hidden>
+      <button type="button" class="btn-primary inline" id="anim-play" aria-pressed="false">Lecture</button>
+      <input type="range" id="anim-seek" min="0" max="1000" value="0" step="1" aria-label="Position dans le parcours de broderie">
+      <label class="anim-speed">Vitesse
+        <select id="anim-speed">
+          <option value="0.25">0,25×</option>
+          <option value="0.5">0,5×</option>
+          <option value="1">1×</option>
+          <option value="2" selected>2×</option>
+          <option value="4">4×</option>
+          <option value="8">8×</option>
+        </select>
+      </label>
+      <p class="anim-status" id="anim-status" role="status">
+        <span class="anim-thread" id="anim-thread"></span><span id="anim-status-text"></span>
+      </p>
+      <p class="anim-legend">Trait plein : points piqués · pointillé : sauts · croix : coupe · cercle : changement de fil</p>
+    </div>
+    {% endif %}
   </section>
 
   <aside class="side">

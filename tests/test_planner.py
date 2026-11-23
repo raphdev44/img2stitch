@@ -59,6 +59,30 @@ def test_excluded_colors_preserve_transparency():
     np.testing.assert_array_equal(rgb[0, 1:], [[20, 20, 200], [20, 20, 200]])
 
 
+def test_thin_band_is_filled_along_its_length_not_hatched(tmp_path, monkeypatch):
+    """Un trait fin (moins de 2 mm) n'est pas haché en rangées : au pas de 0,4 mm ses rangées
+    mesureraient 1 mm et le parcours les relierait par des allers-retours. Le remplissage suit
+    la bande sur toute sa longueur (contours concentriques), sans saut."""
+    from img2stitch import algorithm_standard as A
+
+    calls, real = [], A.zone_fill
+
+    def spy(kind, mask, px_per_mm, s):
+        calls.append(kind)
+        return real(kind, mask, px_per_mm, s)
+
+    monkeypatch.setattr(A, "zone_fill", spy)
+    thin = _img(tmp_path, lambda d: d.line((30, 200, 370, 200), fill="black", width=10))  # ~1,5 mm
+    st = pattern_stats(image_to_pattern(thin, Settings(width_mm=60, n_colors=1)))
+    assert calls == ["contour"]
+    assert st["jumps"] <= 1, st
+
+    calls.clear()
+    thick = _img(tmp_path, lambda d: d.rectangle((100, 100, 300, 300), fill="black"))       # ~15 mm
+    image_to_pattern(thick, Settings(width_mm=60, n_colors=1))
+    assert calls == ["tatami"]
+
+
 def test_ring_with_covered_hole_needs_at_most_one_jump(tmp_path):
     """Anneau clair dont le trou sera rempli en bleu foncé (piqué après, car on pique du plus clair au plus foncé) :
     le fil de l'anneau traverse le trou à couvert. Un seul saut est inévitable : passer d'une moitié de

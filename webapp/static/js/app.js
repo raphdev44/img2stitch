@@ -122,6 +122,217 @@
     };
   }
 
+  /**
+   * Rejoue le parcours d'un motif (données de /parcours.json) sur un canvas.
+   * Ce n'est pas une simulation réaliste : c'est le film des gestes de la machine — l'aiguille
+   * avance, saute (pointillé), coupe (croix) et change de fil (cercle).
+   */
+  function setupPlayback(canvas, data, ui) {
+    const [, , bw, bh] = data.bbox || [0, 0, 0, 0];
+    const padMm = 2;
+    const wMm = Math.max(0.1, bw / 10) + 2 * padMm, hMm = Math.max(0.1, bh / 10) + 2 * padMm;
+    // Assez fin pour rester net une fois le canvas affiché en grand dans la scène.
+    const ppm = Math.min(24, 2400 / wMm, 1800 / hMm);
+    const W = Math.max(2, Math.round(wMm * ppm)), H = Math.max(2, Math.round(hMm * ppm));
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    const base = document.createElement("canvas");
+    base.width = W;
+    base.height = H;
+    const b = base.getContext("2d");
+    // Les coordonnées du parcours sont déjà relatives au coin haut-gauche de la bbox (playback.py).
+    const px = (v) => v / 10 * ppm + padMm * ppm;
+    const py = (v) => v / 10 * ppm + padMm * ppm;
+    const colors = (data.threads || []).map((c) => c || "#333333");
+    const thread = (c) => colors[Math.min(Math.max(c, 0), colors.length - 1)] || "#333333";
+    const counts = data.counts || {};
+
+    // Chaque opération pèse son nombre de points (une coupe ou un changement de fil : 1 unité).
+    const items = [];
+    let units = 0;
+    (data.ops || []).forEach((op) => {
+      const pts = op.slice(2);
+      const n = Math.max(1, pts.length / 2);
+      items.push({ kind: op[0], color: op[1], pts, start: units, end: units + n });
+      units += n;
+    });
+
+    // Début (en unités) de chaque saut : on s'y arrête une demi-seconde pour laisser voir le déplacement.
+    const jumpStarts = items.filter((it) => it.kind === 1).map((it) => it.start);
+    const HOLD_S = 0.5;
+
+    let pos = 0, si = 0, su = 0;
+    let nx = null, ny = null, threadNow = 0, sewn = 0, jumps = 0, trims = 0, changes = 0;
+    let playing = false, raf = 0, last = 0, hold = 0;
+
+    const mark = (x, y) => { nx = px(x); ny = py(y); };
+    const paint = (it, from, to) => {
+      const p = it.pts;
+      if (it.kind === 0) {                        // piqûres
+        b.setLineDash([]);
+        b.strokeStyle = thread(it.color);
+        b.lineWidth = Math.max(1.2, 0.34 * ppm);
+        b.lineJoin = b.lineCap = "round";
+        b.beginPath();
+        if (from === 0) { mark(p[0], p[1]); b.moveTo(nx, ny); }
+        else b.moveTo(px(p[2 * from - 2]), py(p[2 * from - 1]));
+        for (let k = Math.max(1, from); k < to; k++) {
+          b.lineTo(px(p[2 * k]), py(p[2 * k + 1]));
+          mark(p[2 * k], p[2 * k + 1]);
+        }
+        b.stroke();
+        sewn += to - Math.max(1, from);
+      } else if (it.kind === 1) {                 // sauts
+        b.setLineDash([Math.max(2, 0.5 * ppm), Math.max(2, 0.45 * ppm)]);
+        b.strokeStyle = "#d9482f";
+        b.lineWidth = Math.max(1, 0.14 * ppm);
+        b.lineJoin = b.lineCap = "round";
+        b.beginPath();
+        if (from === 0) { mark(p[0], p[1]); b.moveTo(nx, ny); }
+        else b.moveTo(px(p[2 * from - 2]), py(p[2 * from - 1]));
+        for (let k = Math.max(1, from); k < to; k++) {
+          b.lineTo(px(p[2 * k]), py(p[2 * k + 1]));
+          mark(p[2 * k], p[2 * k + 1]);
+        }
+        b.stroke();
+        b.setLineDash([]);
+        jumps += to - from;   // ici le premier point EST le déplacement (contrairement aux piqûres)
+      } else if (it.kind === 2) {                 // coupe de fil
+        if (from === 0 && nx !== null) {
+          const r = Math.max(2.5, 0.6 * ppm);
+          b.strokeStyle = "#c22f16";
+          b.lineWidth = Math.max(1, 0.16 * ppm);
+          b.beginPath();
+          b.moveTo(nx - r, ny - r); b.lineTo(nx + r, ny + r);
+          b.moveTo(nx + r, ny - r); b.lineTo(nx - r, ny + r);
+          b.stroke();
+        }
+        trims += 1;
+      } else if (it.kind === 3) {                 // changement de fil
+        threadNow = it.color;
+        changes += 1;
+        if (from === 0 && nx !== null) {
+          const r = Math.max(3, 0.8 * ppm);
+          b.strokeStyle = thread(it.color);
+          b.lineWidth = Math.max(1.4, 0.2 * ppm);
+          b.beginPath(); b.arc(nx, ny, r, 0, Math.PI * 2); b.stroke();
+        }
+      }
+    };
+
+    const live = () => {
+      ctx.clearRect(0, 0, W, H);
+      ctx.drawImage(base, 0, 0);
+      if (nx === null) return;
+      const r = Math.max(3, 0.55 * ppm);
+      ctx.beginPath(); ctx.arc(nx, ny, r, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff"; ctx.fill();
+      ctx.lineWidth = Math.max(1.5, 0.22 * ppm); ctx.strokeStyle = thread(threadNow); ctx.stroke();
+      ctx.lineWidth = 1; ctx.strokeStyle = "#1b1b1b";
+      ctx.beginPath(); ctx.arc(nx, ny, Math.max(1.2, 0.14 * ppm), 0, Math.PI * 2); ctx.stroke();
+    };
+
+    const painted = () => (si < items.length ? items[si].start + su : units);
+    const stepTo = (target) => {
+      while (si < items.length) {
+        const it = items[si];
+        const upto = Math.min(target, it.end) - it.start;
+        if (upto <= su) break;
+        paint(it, su, upto);
+        su = upto;
+        if (su < it.end - it.start) break;
+        si += 1;
+        su = 0;
+      }
+    };
+    const fmt = (n) => (n || 0).toLocaleString("fr-FR");
+    const refresh = () => {
+      if (ui.seek && units) ui.seek.value = String(Math.round(1000 * pos / units));
+      if (ui.thread) ui.thread.style.setProperty("--c", thread(threadNow));
+      if (!ui.status) return;
+      const total = counts.stitches || 0;
+      ui.status.textContent = `Fil ${Math.min(threadNow + 1, colors.length)}/${colors.length} · `
+        + `${fmt(sewn)} / ${fmt(total)} points · ${fmt(jumps)} sauts · ${fmt(trims)} coupes`
+        + (changes ? ` · ${fmt(changes)} changement${changes > 1 ? "s" : ""} de fil` : "");
+    };
+    const reset = () => {
+      si = su = sewn = jumps = trims = changes = 0;
+      hold = 0;
+      nx = ny = null;
+      threadNow = 0;
+      b.setLineDash([]);
+      b.clearRect(0, 0, W, H);
+    };
+    const seekTo = (target) => {
+      hold = 0;
+      pos = Math.max(0, Math.min(units, target));
+      if (pos < painted()) reset();
+      stepTo(Math.floor(pos));
+      live();
+      refresh();
+    };
+
+    const setLabel = () => {
+      if (!ui.play) return;
+      ui.play.textContent = pos >= units && units ? "Rejouer" : "Lecture";
+    };
+    const pause = () => {
+      playing = false;
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      if (ui.play) ui.play.setAttribute("aria-pressed", "false");
+      setLabel();
+    };
+    const frame = (now) => {
+      if (!playing) return;
+      const dt = last ? Math.min(0.12, (now - last) / 1000) : 0;
+      last = now;
+      if (hold > 0) {                 // temps d'arrêt sur un saut : l'aiguille reste sur place
+        hold -= dt;
+        live();
+        refresh();
+        raf = requestAnimationFrame(frame);
+        return;
+      }
+      const next = Math.min(units, pos + dt * rate());
+      // Si la frame franchit le départ d'un saut, on s'arrête pile dessus pour une pause d'1/2 s.
+      const stop = jumpStarts.find((s) => s > pos && s <= next);
+      if (stop === undefined) pos = next;
+      else { pos = stop; hold = HOLD_S; }
+      stepTo(Math.floor(pos));
+      live();
+      refresh();
+      if (pos >= units) { pause(); return; }
+      raf = requestAnimationFrame(frame);
+    };
+    // Un motif court ne défile pas trop vite : la durée de référence tourne autour de 14 s à 1×.
+    const rate = () => Math.max(700, units / 14) * (Number(ui.speed?.value || 2) || 1);
+    const play = () => {
+      if (!units) return;
+      if (pos >= units) seekTo(0);
+      playing = true;
+      last = 0;
+      if (ui.play) { ui.play.textContent = "Pause"; ui.play.setAttribute("aria-pressed", "true"); }
+      raf = requestAnimationFrame(frame);
+    };
+
+    ui.play?.addEventListener("click", () => (playing ? pause() : play()));
+    ui.seek?.addEventListener("input", () => {
+      pause();
+      seekTo(units * Number(ui.seek.value) / 1000);
+    });
+
+    seekTo(0);
+    return {
+      setActive(on) {
+        if (ui.bar) ui.bar.hidden = !on;
+        if (!on) { pause(); return; }
+        if (!playing) play();
+      },
+    };
+  }
+
   // --- Création ---
   if (page === "create" || page === "cross-stitch" || page === "hand-embroidery" || page === "streamline") {
     const form = $("#create-form") || $("#cross-stitch-form") || $("#hand-form") || $("#streamline-form");
@@ -454,17 +665,39 @@
     const root = $("#design");
     if (!root) return;
     const tabs = $$(".segmented button", root);
-    const imgs = $$(".stage img", root);
-    let zoom;
+    const views = $$(".stage [data-view]", root);
+    const imgs = views.filter((v) => v.tagName === "IMG");
+    let zoom, player = null;
+
+    // Aperçu animé : les données du parcours sont chargées au premier affichage de l'onglet.
+    const loadPlayer = async () => {
+      if (player) return player;
+      const canvas = views.find((v) => v.tagName === "CANVAS");
+      const res = await fetch(root.dataset.playback, { cache: "no-store" });
+      if (!res.ok || !canvas) throw new Error("Le parcours du motif n'est pas disponible.");
+      player = setupPlayback(canvas, await res.json(), {
+        bar: $("#anim-bar"), play: $("#anim-play"), seek: $("#anim-seek"), speed: $("#anim-speed"),
+        thread: $("#anim-thread"), status: $("#anim-status-text"),
+      });
+      return player;
+    };
 
     const show = (view) => {
       tabs.forEach((t) => t.setAttribute("aria-selected", String(t.dataset.view === view)));
-      imgs.forEach((i) => i.classList.toggle("shown", i.dataset.view === view));
+      views.forEach((v) => v.classList.toggle("shown", v.dataset.view === view));
+      const bar = $("#anim-bar");
+      if (bar) bar.hidden = view !== "anim";
+      if (player) player.setActive(view === "anim");
+      if (view === "anim" && !player) {
+        loadPlayer()
+          .then((p) => { p.setActive(true); zoom.fit(); })
+          .catch((ex) => { $("#anim-status-text").textContent = ex.message; });
+      }
       if (zoom) requestAnimationFrame(zoom.fit);
     };
     tabs.forEach((t) => t.addEventListener("click", () => !t.disabled && show(t.dataset.view)));
     show(root.dataset.hasPhoto === "1" ? "photo" : root.dataset.hasRaw === "1" ? "raw" : "source");
-    zoom = setupStageNavigation($("#design-stage"), () => imgs.find((i) => i.classList.contains("shown")), $("#stage-fit"));
+    zoom = setupStageNavigation($("#design-stage"), () => views.find((v) => v.classList.contains("shown")), $("#stage-fit"));
     imgs.forEach((img) => img.addEventListener("load", () => zoom.fit()));
 
     if (root.dataset.status === "processing") {

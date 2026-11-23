@@ -1,9 +1,10 @@
+import json
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, Response, abort, current_app, jsonify, redirect, render_template, request, send_file, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from img2stitch.algorithm_vectorize import available as geometry_available
@@ -315,6 +316,15 @@ def hand_edit(design_id):
     strokes = list((meta.get("hand_mix") or {}).get("strokes") or [])
     return render_template("hand_edit.html", d=meta, strokes=strokes, hand_labels={key: value[0] for key, value in STITCH_TYPES.items()},
                            stroke_map=url_for("web.design_file", design_id=design_id, name="strokes.png", v=meta.get("photo_version")))
+
+
+@bp.get("/motifs/<design_id>/parcours.json")
+def design_playback(design_id):
+    """Parcours du motif pour l'aperçu animé. Compact (pas d'espaces) : il peut compter 100 000 points."""
+    data = store().playback(design_id)
+    if data is None:
+        abort(404)
+    return Response(json.dumps(data, separators=(",", ":")), mimetype="application/json")
 
 
 @bp.get("/motifs/<design_id>/fichiers/<name>")

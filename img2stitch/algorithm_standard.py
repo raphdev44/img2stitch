@@ -12,6 +12,25 @@ from .outline import overlap_masks, contours_mm
 from .planner import Sewer, plan_fill, plan_outline
 
 SIZE_MARGIN_MM = 0.2  # les formats arrondissent les coordonnées au 1/10 mm : marge gardée dans le cadre
+THIN_SHAPE_MM = 2.0             # épaisseur sous laquelle une bande ne se remplit pas en rangées
+THIN_SHAPE_MIN_AREA_MM2 = 10.0  # une zone plus petite qu'un ongle reste en rangées : sa stratégie ne change rien
+LINEAR_FILLS = {"tatami", "tatami_h", "tatami_v"}
+
+
+def _max_thickness_mm(mask, px_per_mm):
+    """Épaisseur de la forme : diamètre du plus gros disque inscrit dans son masque (mm)."""
+    if not mask.any():
+        return 0.0
+    dt = cv2.distanceTransform(mask.astype(np.uint8), cv2.DIST_L2, 5)
+    return 2.0 * float(dt.max()) / px_per_mm
+
+
+def _fill_along_length(kind, mask, px_per_mm):
+    """Vrai pour une bande fine demandée en remplissage linéaire : le tatami y produirait des rangées
+    d'1 mm reliées par des allers-retours, un remplissage qui suit la bande fait le même travail en
+    deux fois moins de points et de sauts. Les zones minuscules n'y gagnent rien (Heron : +4 sauts)."""
+    return (kind in LINEAR_FILLS and mask.sum() / px_per_mm ** 2 >= THIN_SHAPE_MIN_AREA_MM2
+            and _max_thickness_mm(mask, px_per_mm) < THIN_SHAPE_MM)
 
 
 def _center_on_origin(pattern):
@@ -140,6 +159,12 @@ def _build_pattern(path, s: Settings):
     tol = np.ones((3, 3), np.uint8)  # tolérance d'1 px : les contours sont sur le bord des formes
     for i, (rgb, mask, fmask) in enumerate(zip(palette, masks, fill_masks)):
         color, kind, outline = looks[i]
+        # Une bande fine (trait, lettrage) n'a pas la place pour un remplissage en rangées : au pas de
+        # 0,4 mm ses rangées mesurent à peine 1 mm et le parcours les relie par des allers-retours dans
+        # tous les sens. Des contours concentriques suivent la bande sur toute sa longueur : le trait
+        # reste plein, avec deux fois moins de points et de sauts.
+        if _fill_along_length(kind, mask, px_per_mm):
+            kind = "contour"
         passes = zone_fill(kind, fmask, px_per_mm, s)
         # Le contour se règle zone par zone (None : on suit le réglage global)
         loops = (contours_mm(mask, px_per_mm, s.outline_simplify_mm, s.min_area_mm2)

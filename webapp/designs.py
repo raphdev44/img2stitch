@@ -28,6 +28,7 @@ from img2stitch.fill import FILL_TYPES
 from img2stitch.hand import CREATIVITY as HAND_CREATIVITY
 from img2stitch.hand import STYLES as HAND_STYLES, hand_pattern
 from img2stitch.optimize import optimize_pattern
+from img2stitch.playback import playback_data
 from img2stitch.radical import optimize_pattern_radical
 from img2stitch.algorithm_vectorize import VectorizerUnavailable
 from img2stitch.relief import LEGACY as RELIEF_LEGACY
@@ -120,6 +121,18 @@ class DesignStore:
         meta["has_photo"] = (d / PHOTO).is_file()
         meta["has_thumb"] = (d / THUMB).is_file()
         return meta
+
+    def playback(self, design_id):
+        """Parcours compact du motif pour l'aperçu animé (None tant que le motif n'est pas prêt)."""
+        meta = self.get(design_id)
+        d = self.dir(design_id)
+        if meta is None or meta.get("status") != "ready" or d is None:
+            return None
+        try:
+            return playback_data(_load_pattern(d))
+        except (OSError, ValueError, KeyError):
+            log.exception("Parcours illisible pour %s", design_id)
+            return None
 
     def thread_lengths(self, design_id):
         """Longueur de fil estimée (m) par fil, dans l'ordre de d.threads.
